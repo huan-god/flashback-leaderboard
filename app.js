@@ -25,7 +25,7 @@ const uid = () => crypto.randomUUID?.() || String(Date.now())+'_'+Math.random().
 let sb = null;
 let toastTimer = 0;
 const state = {page:'leaderboard',versions:[],stages:[],records:[],players:[],archives:[],carries:[],
-  carryMetric:'appearance_count',versionId:'',stageId:'',group:'zero',user:null,profile:null,isAdmin:false,connected:false,notice:''};
+  carryMetric:'appearance_count',carryFilter:'',versionId:'',stageId:'',group:'zero',user:null,profile:null,isAdmin:false,connected:false,notice:''};
 
 async function getSb() {
   if (sb) return sb;
@@ -99,6 +99,12 @@ function standardStages(versionId){
 function challengeOccurrences(stage){
   return state.stages.filter(other=>other.challenge_id===stage.challenge_id).length;
 }
+function splitCarryNames(value){
+  return String(value??'').split(/[/／、]/).map(name=>name.trim());
+}
+function carryKey(name){
+  return name.normalize('NFKC').trim().toLowerCase();
+}
 function recordsArchive(rows){
   if(!rows.length)return '';
   return `<div class="board-foot"><span>历史档案 · 全 0 塑 · 6 回合内满星</span></div>
@@ -112,17 +118,33 @@ function renderLeaderboard(){
   const ver=state.versions.find(x=>x.id===state.versionId);
   const stages=standardStages(state.versionId);
   const st=stages.find(x=>x.id===state.stageId);
-  const rows=state.records.filter(r=>r.stage_id===state.stageId&&r.group_code===state.group).sort(compareRecord);
-  const archives=state.archives.filter(r=>r.stage_id===state.stageId&&r.group_code===state.group).sort((a,b)=>a.display_order-b.display_order);
+  const matchesStage=row=>row.stage_id===state.stageId&&row.group_code===state.group;
+  const ranked=state.records.filter(matchesStage).sort(compareRecord).map((record,index)=>({
+    ...record,rank:index+1,carryNames:splitCarryNames(record.carry_name)
+  }));
+  const historical=state.archives.filter(matchesStage).sort((a,b)=>a.display_order-b.display_order);
+  const names=new Map();
+  for(const name of [...ranked.flatMap(row=>row.carryNames),...historical.flatMap(row=>row.carry_names)]){
+    const key=carryKey(name);
+    if(key&&!names.has(key))names.set(key,name);
+  }
+  if(!names.has(state.carryFilter))state.carryFilter='';
+  const matchesCarry=carryNames=>!state.carryFilter||carryNames.some(name=>carryKey(name)===state.carryFilter);
+  const rows=ranked.filter(row=>matchesCarry(row.carryNames));
+  const archives=historical.filter(row=>matchesCarry(row.carry_names));
+  const carryOptions=[...names].sort((a,b)=>a[1].localeCompare(b[1],'zh-CN',{numeric:true})).map(([key,name])=>
+    `<option value="${esc(key)}" ${key===state.carryFilter?'selected':''}>${esc(name)}</option>`).join('');
   const options=state.versions.map(x=>`<option value="${esc(x.id)}" ${state.versionId===x.id?'selected':''}>${esc(x.label)}</option>`).join('');
   return `<section class="content-section"><div class="section-eyebrow">LATEST RECORDS</div>
     <div class="section-header"><div><h2>焦点闪回 · 排行榜</h2><p class="section-subtitle">同一阵容只展示最短回合的唯一纪录保持者 · 同分先上传者优先</p></div><select id="versionSelect" class="version-select" aria-label="选择版本">${options}</select></div>
     <div class="board-wrap"><aside class="filter-panel"><div class="filter-title">选择挑战 <span class="filter-small">STAGE SELECT</span></div><div class="filter-divider"></div><div class="filter-label">01 / 关卡</div>
     <div class="stage-options">${stages.map(x=>`<button class="stage-button ${state.stageId===x.id?'active':''}" data-action="stage" data-id="${esc(x.id)}"><span class="stage-num">0${x.stage_no}</span><span class="stage-name">${esc(x.name)}${challengeOccurrences(x)>1?' · 重复关卡':''}</span><span class="chevron">›</span></button>`).join('')||'<p class="smaller">暂无关卡</p>'}</div>
     <div class="filter-divider"></div><div class="filter-label">02 / 塑造限制</div><div class="group-switch"><button data-action="group" data-group="zero" class="${state.group==='zero'?'active':''}">全0塑造</button><button data-action="group" data-group="max" class="${state.group==='max'?'active':''}">全满塑造</button></div>
+    <div class="filter-divider"></div><label class="filter-label carry-filter-label" for="carryFilter">03 / 主 C 筛选</label>
+    <select id="carryFilter" class="version-select carry-filter" ${names.size?'':'disabled'}><option value="">全部主 C</option>${carryOptions}</select>
     <div class="filter-hint">✦ 每个版本有三个关卡。<br />✦ 仅收录 <strong>0—6 回合</strong> 通关。<br />✦ 不同阵容独立保留最佳纪录。<br />✦ 分数并列按提交时间优先。</div></aside>
     <div class="board-panel"><div class="board-head"><div><h3>${esc(st?.name||'暂无关卡')} <span style="font-size:13px;color:var(--gold)">/ ${state.group==='zero'?'全0塑造':'全满塑造'}</span></h3><p>${esc(ver?.label||'尚未配置版本')} · ${archives.length&&!rows.length?`${archives.length} 条历史档案`:`${rows.length} 个当前纪录${archives.length?` · ${archives.length} 条历史档案`:''}`}</p></div><span class="chip">${archives.length&&!rows.length?'历史档案':'✧ 已审核通过'}</span></div>
-    ${rows.length?`<div class="table-scroll"><table class="board-table"><thead><tr><th>排序</th><th>纪录保持者</th><th>主 C / 队伍</th><th>回合</th><th>首次上传</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td><span class="rank-icon ${i===0?'first':''}">${String(i+1).padStart(2,'0')}</span></td><td><span class="player-name">${esc(r.display_name)}</span><div class="smaller">唯一纪录保持者</div></td><td><div style="font-size:12px;color:var(--gold);margin-bottom:6px">主C · ${esc(r.carry_name)}</div><div class="team-pills">${r.team.map(n=>`<span class="team-pill">${esc(n)}</span>`).join('')}</div>${relatedLink(r.related_url)}</td><td><span class="rounds">${r.rounds}<small>回合</small></span></td><td><span class="smaller">${dateLabel(r.created_at)}</span></td></tr>`).join('')}</tbody></table></div>`:archives.length?'':`<div class="empty"><div class="symbol">✧</div><h3>当前榜单为空</h3><p>${state.connected?'尚无通过审核的成绩。':'投稿服务暂未开放。'} </p>${canSubmit()?'<button class="gold-button" data-action="submit">投稿成绩 →</button>':''}</div>`}
+    ${rows.length?`<div class="table-scroll"><table class="board-table"><thead><tr><th>排序</th><th>纪录保持者</th><th>主 C / 队伍</th><th>回合</th><th>首次上传</th></tr></thead><tbody>${rows.map(r=>`<tr><td><span class="rank-icon ${r.rank===1?'first':''}">${String(r.rank).padStart(2,'0')}</span></td><td><span class="player-name">${esc(r.display_name)}</span><div class="smaller">唯一纪录保持者</div></td><td><div style="font-size:12px;color:var(--gold);margin-bottom:6px">主C · ${esc(r.carry_name)}</div><div class="team-pills">${r.team.map(n=>`<span class="team-pill">${esc(n)}</span>`).join('')}</div>${relatedLink(r.related_url)}</td><td><span class="rounds">${r.rounds}<small>回合</small></span></td><td><span class="smaller">${dateLabel(r.created_at)}</span></td></tr>`).join('')}</tbody></table></div>`:archives.length?'':`<div class="empty"><div class="symbol">✧</div><h3>当前榜单为空</h3><p>${state.connected?'尚无通过审核的成绩。':'投稿服务暂未开放。'} </p>${canSubmit()?'<button class="gold-button" data-action="submit">投稿成绩 →</button>':''}</div>`}
     ${recordsArchive(archives)}
     <div class="board-foot"><span>以服务器上传时间为准 · 审核后自动更新榜单</span><button class="text-button" data-action="refresh">刷新榜单 ↻</button></div></div></div>
     <div class="two-cards"><div class="info-card"><div class="info-number">01</div><h3>一队 · 一纪录</h3><p>相同关卡、塑造组和完整阵容，仅保留回合最少的一条记录。主C单独显示，但不改变队伍归属。</p></div><div class="info-card"><div class="info-number">02</div><h3>荣耀从未消失</h3><p>被超越的纪录不再公开占榜，曾经获得的有效历史荣誉仍计入玩家累计上榜次数。</p></div></div></section>`;
@@ -189,14 +211,14 @@ function openLogin(){
 function getSubmission(form){
   const fd=new FormData(form);const team=String(fd.get('team')||'').split(/[、，,;；\n]+/).map(x=>x.trim()).filter(Boolean);
   const nickname=String(fd.get('nickname')||'').trim();
-  const carries=String(fd.get('carry')||'').split(/[/／、]/).map(name=>name.trim());
+  const carries=splitCarryNames(fd.get('carry'));
   const rounds=Number(fd.get('rounds'));const file=fd.get('proof');
   if(nickname.length<2||nickname.length>24)throw Error('玩家昵称需要 2—24 个字符。');
   if(team.length<1||team.length>4)throw Error('请填写 1—4 名实际上场角色。');
   if(team.some(x=>x.length>40))throw Error('单个角色名称不能超过 40 字符。');
   const norm=team.map(x=>x.normalize('NFKC').trim().toLowerCase());
   if(new Set(norm).size!==team.length)throw Error('配队不能填写重复角色。');
-  const normalizedCarries=carries.map(name=>name.normalize('NFKC').trim().toLowerCase());
+  const normalizedCarries=carries.map(carryKey);
   if(carries.length>4 || new Set(normalizedCarries).size!==carries.length || normalizedCarries.some(name=>!norm.includes(name))){
     throw Error('每位主 C 都必须属于你填写的完整队伍，且只能填一次。');
   }
@@ -519,6 +541,11 @@ document.addEventListener('change',ev=>{
     state.versionId=ev.target.value;
     state.stageId=standardStages(state.versionId)[0]?.id||'';
     render();
+  }
+  if(ev.target.id==='carryFilter'){
+    state.carryFilter=ev.target.value;
+    render();
+    $('#carryFilter').focus({preventScroll:true});
   }
   if(ev.target.id==='fVersion'){const el=$('#fStage');if(el)el.innerHTML=stageOptions(ev.target.value);}
 });

@@ -9,3 +9,6 @@
 .admin-count{margin-bottom:12px}
 .wiki-link{color:#dfbe81;display:inline-block;margin:0 4px;text-decoration:underline;text-underline-offset:3px}
 .wiki-link:hover{color:#ffe1a3}
+.carry-filter-label{display:block}
+.carry-filter{min-width:0;width:100%;padding:8px 10px;font-size:12px}
+.carry-filter:disabled{opacity:.55}
