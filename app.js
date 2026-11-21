@@ -77,7 +77,7 @@ function metric(){
   $('#submitButton').disabled=!canSubmit();
   $('#heroSubmit').disabled=!canSubmit();
   $('#userButton').hidden=!state.connected;
-  $('#userButton').textContent=state.isAdmin?'站长账号':(state.profile?.display_name || (state.user?'设置昵称':'管理员登录'));
+  $('#userButton').textContent=state.isAdmin?'管理员账号':(state.profile?.display_name || (state.user?'设置昵称':'管理员登录'));
   const existing=$('#adminButton');if(existing)existing.remove();
   if(state.connected&&state.isAdmin){const btn=document.createElement('button');btn.id='adminButton';btn.className='ghost-button';btn.textContent='管理后台';$('#userButton').before(btn);}
 }
