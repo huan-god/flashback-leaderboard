@@ -515,7 +515,11 @@ document.addEventListener('click',async ev=>{
   if(action==='logout'){await sb.auth.signOut();closeModal();await syncAuth();toast('已退出登录。');return;}
 });
 document.addEventListener('change',ev=>{
-  if(ev.target.id==='versionSelect'){state.versionId=ev.target.value;state.stageId='';render();}
+  if(ev.target.id==='versionSelect'){
+    state.versionId=ev.target.value;
+    state.stageId=standardStages(state.versionId)[0]?.id||'';
+    render();
+  }
   if(ev.target.id==='fVersion'){const el=$('#fStage');if(el)el.innerHTML=stageOptions(ev.target.value);}
 });
 document.addEventListener('submit',async ev=>{
