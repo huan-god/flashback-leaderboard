@@ -12,7 +12,9 @@
 
 ## 部署
 
-GitHub Pages 从 `main` 根目录发布静态网页，Supabase 提供登录、榜单、审核与私有截图存储。新项目依次运行 `supabase/schema.sql`、`supabase/003_related_links.sql` 和 `supabase/seed_4_1.sql`。已有 V1 数据库先备份，再依次应用 `002_remove_records.sql` 和 `003_related_links.sql`。已有 V2 数据库只需应用 `003_related_links.sql`。
+GitHub Pages 从 `main` 根目录发布静态网页，Supabase 提供登录、榜单、审核与私有截图存储。新项目依次运行 `supabase/schema.sql`、`supabase/003_related_links.sql`、`supabase/004_challenge_rankings.sql`、`supabase/seed_4_1.sql` 和 `supabase/005_import_v39.sql`。已有项目按编号补齐尚未应用的迁移。只有初代数据库需要先运行 `002_remove_records.sql`。
+
+3.9 历史档案沿用原表配队写法，每行记录第一位攻略者。主 C 榜按关联后的关卡计算，通关关卡数每关只记一次，上榜次数按同一关卡的塑造组和配队去重。历史配队简称按原表文本比较。
 
 将项目 URL 和 publishable key 写入 `config.js`。在 Supabase Auth 启用匿名登录和邮箱登录，将 Pages 的完整网址填写为 Site URL 并加入 Redirect URLs。审核员须使用已验证的邮箱账号，并由项目所有者授权。管理密钥不得提交至仓库。
 

@@ -24,7 +24,8 @@ const dateLabel = v => {try{return new Date(v).toLocaleString('zh-CN',{year:'num
 const uid = () => crypto.randomUUID?.() || String(Date.now())+'_'+Math.random().toString(36).slice(2);
 let sb = null;
 let toastTimer = 0;
-const state = {page:'leaderboard',versions:[],stages:[],records:[],players:[],versionId:'',stageId:'',group:'zero',user:null,profile:null,isAdmin:false,connected:false,notice:''};
+const state = {page:'leaderboard',versions:[],stages:[],records:[],players:[],archives:[],carries:[],
+  carryMetric:'appearance_count',versionId:'',stageId:'',group:'zero',user:null,profile:null,isAdmin:false,connected:false,notice:''};
 
 async function getSb() {
   if (sb) return sb;
@@ -38,15 +39,19 @@ async function query(table, select='*') {
   return data||[];
 }
 async function loadRemote() {
-  const [versions,stages,records,players]=await Promise.all([
+  const [versions,stages,records,players,archives,carries]=await Promise.all([
     query('versions','id,code,label,created_at'),
-    query('stages','id,version_id,stage_no,name'),
+    query('stages','id,version_id,stage_no,name,challenge_id'),
     query('leaderboard_records'),
-    query('player_ranking')
+    query('player_ranking'),
+    query('historical_records','id,stage_id,group_code,display_order,carry_names,lineup_label,credited_player'),
+    query('carry_ranking','carry_name,appearance_count,challenge_count')
   ]);
-  state.versions=versions.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  state.versions=versions.sort((a,b)=>b.code.localeCompare(a.code,'zh-CN',{numeric:true})||new Date(b.created_at)-new Date(a.created_at));
   state.stages=stages;
   state.records=records;
+  state.archives=archives;
+  state.carries=carries;
   state.players=players.sort((a,b)=>b.historical_count-a.historical_count || b.current_count-a.current_count || a.display_name.localeCompare(b.display_name,'zh-CN') || a.player_id.localeCompare(b.player_id));
 }
 async function refresh() {
@@ -85,25 +90,57 @@ function render(){
   metric();
   document.querySelectorAll('.nav-link').forEach(b=>b.classList.toggle('active',b.dataset.page===state.page));
   $('#content').innerHTML=state.notice?`<div class="notice error" style="margin-top:18px">${esc(state.notice)}</div>`:'';
-  const html=state.page==='leaderboard'?renderLeaderboard():state.page==='players'?renderPlayers():renderRules();
-  $('#content').insertAdjacentHTML('beforeend',html);
+  const pages={leaderboard:renderLeaderboard,carries:renderCarries,players:renderPlayers,rules:renderRules};
+  $('#content').insertAdjacentHTML('beforeend',pages[state.page]());
+}
+function standardStages(versionId){
+  return state.stages.filter(stage=>stage.version_id===versionId).sort((a,b)=>a.stage_no-b.stage_no);
+}
+function challengeOccurrences(stage){
+  return state.stages.filter(other=>other.challenge_id===stage.challenge_id).length;
+}
+function recordsArchive(rows){
+  if(!rows.length)return '';
+  return `<div class="board-foot"><span>历史档案 · 全 0 塑 · 6 回合内满星</span></div>
+  <div class="table-scroll"><table class="board-table">
+    <thead><tr><th>主 C</th><th>原表配队</th><th>攻略者</th><th>成绩</th></tr></thead>
+    <tbody>${rows.map(row=>`<tr><td>${row.carry_names.map(esc).join('／')}</td>
+      <td>${esc(row.lineup_label)}</td><td>${esc(row.credited_player)}</td><td>≤ 6 回合</td></tr>`).join('')}</tbody>
+  </table></div><div class="board-foot"><span>档案沿用原表简称、替代位与行序。准确回合未收录。</span></div>`;
 }
 function renderLeaderboard(){
   const ver=state.versions.find(x=>x.id===state.versionId);
-  const stages=state.stages.filter(x=>x.version_id===state.versionId).sort((a,b)=>a.stage_no-b.stage_no);
+  const stages=standardStages(state.versionId);
   const st=stages.find(x=>x.id===state.stageId);
   const rows=state.records.filter(r=>r.stage_id===state.stageId&&r.group_code===state.group).sort(compareRecord);
+  const archives=state.archives.filter(r=>r.stage_id===state.stageId&&r.group_code===state.group).sort((a,b)=>a.display_order-b.display_order);
   const options=state.versions.map(x=>`<option value="${esc(x.id)}" ${state.versionId===x.id?'selected':''}>${esc(x.label)}</option>`).join('');
   return `<section class="content-section"><div class="section-eyebrow">LATEST RECORDS</div>
     <div class="section-header"><div><h2>焦点闪回 · 排行榜</h2><p class="section-subtitle">同一阵容只展示最短回合的唯一纪录保持者 · 同分先上传者优先</p></div><select id="versionSelect" class="version-select" aria-label="选择版本">${options}</select></div>
     <div class="board-wrap"><aside class="filter-panel"><div class="filter-title">选择挑战 <span class="filter-small">STAGE SELECT</span></div><div class="filter-divider"></div><div class="filter-label">01 / 关卡</div>
-    <div class="stage-options">${stages.map(x=>`<button class="stage-button ${state.stageId===x.id?'active':''}" data-action="stage" data-id="${esc(x.id)}"><span class="stage-num">0${x.stage_no}</span><span class="stage-name">${esc(x.name)}</span><span class="chevron">›</span></button>`).join('')||'<p class="smaller">暂无关卡</p>'}</div>
+    <div class="stage-options">${stages.map(x=>`<button class="stage-button ${state.stageId===x.id?'active':''}" data-action="stage" data-id="${esc(x.id)}"><span class="stage-num">0${x.stage_no}</span><span class="stage-name">${esc(x.name)}${challengeOccurrences(x)>1?' · 重复关卡':''}</span><span class="chevron">›</span></button>`).join('')||'<p class="smaller">暂无关卡</p>'}</div>
     <div class="filter-divider"></div><div class="filter-label">02 / 塑造限制</div><div class="group-switch"><button data-action="group" data-group="zero" class="${state.group==='zero'?'active':''}">全0塑造</button><button data-action="group" data-group="max" class="${state.group==='max'?'active':''}">全满塑造</button></div>
     <div class="filter-hint">✦ 每个版本有三个关卡。<br />✦ 仅收录 <strong>0—6 回合</strong> 通关。<br />✦ 不同阵容独立保留最佳纪录。<br />✦ 分数并列按提交时间优先。</div></aside>
-    <div class="board-panel"><div class="board-head"><div><h3>${esc(st?.name||'暂无关卡')} <span style="font-size:13px;color:var(--gold)">/ ${state.group==='zero'?'全0塑造':'全满塑造'}</span></h3><p>${esc(ver?.label||'尚未配置版本')} · 共 ${rows.length} 个当前纪录</p></div><span class="chip">✧ 已审核通过</span></div>
-    ${rows.length?`<div class="table-scroll"><table class="board-table"><thead><tr><th>排序</th><th>纪录保持者</th><th>主 C / 队伍</th><th>回合</th><th>首次上传</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td><span class="rank-icon ${i===0?'first':''}">${String(i+1).padStart(2,'0')}</span></td><td><span class="player-name">${esc(r.display_name)}</span><div class="smaller">唯一纪录保持者</div></td><td><div style="font-size:12px;color:var(--gold);margin-bottom:6px">主C · ${esc(r.carry_name)}</div><div class="team-pills">${r.team.map(n=>`<span class="team-pill">${esc(n)}</span>`).join('')}</div>${relatedLink(r.related_url)}</td><td><span class="rounds">${r.rounds}<small>回合</small></span></td><td><span class="smaller">${dateLabel(r.created_at)}</span></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><div class="symbol">✧</div><h3>当前榜单为空</h3><p>${state.connected?'尚无通过审核的成绩。':'投稿服务暂未开放。'} </p>${canSubmit()?'<button class="gold-button" data-action="submit">投稿成绩 →</button>':''}</div>`}
+    <div class="board-panel"><div class="board-head"><div><h3>${esc(st?.name||'暂无关卡')} <span style="font-size:13px;color:var(--gold)">/ ${state.group==='zero'?'全0塑造':'全满塑造'}</span></h3><p>${esc(ver?.label||'尚未配置版本')} · ${archives.length&&!rows.length?`${archives.length} 条历史档案`:`${rows.length} 个当前纪录${archives.length?` · ${archives.length} 条历史档案`:''}`}</p></div><span class="chip">${archives.length&&!rows.length?'历史档案':'✧ 已审核通过'}</span></div>
+    ${rows.length?`<div class="table-scroll"><table class="board-table"><thead><tr><th>排序</th><th>纪录保持者</th><th>主 C / 队伍</th><th>回合</th><th>首次上传</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td><span class="rank-icon ${i===0?'first':''}">${String(i+1).padStart(2,'0')}</span></td><td><span class="player-name">${esc(r.display_name)}</span><div class="smaller">唯一纪录保持者</div></td><td><div style="font-size:12px;color:var(--gold);margin-bottom:6px">主C · ${esc(r.carry_name)}</div><div class="team-pills">${r.team.map(n=>`<span class="team-pill">${esc(n)}</span>`).join('')}</div>${relatedLink(r.related_url)}</td><td><span class="rounds">${r.rounds}<small>回合</small></span></td><td><span class="smaller">${dateLabel(r.created_at)}</span></td></tr>`).join('')}</tbody></table></div>`:archives.length?'':`<div class="empty"><div class="symbol">✧</div><h3>当前榜单为空</h3><p>${state.connected?'尚无通过审核的成绩。':'投稿服务暂未开放。'} </p>${canSubmit()?'<button class="gold-button" data-action="submit">投稿成绩 →</button>':''}</div>`}
+    ${recordsArchive(archives)}
     <div class="board-foot"><span>以服务器上传时间为准 · 审核后自动更新榜单</span><button class="text-button" data-action="refresh">刷新榜单 ↻</button></div></div></div>
     <div class="two-cards"><div class="info-card"><div class="info-number">01</div><h3>一队 · 一纪录</h3><p>相同关卡、塑造组和完整阵容，仅保留回合最少的一条记录。主C单独显示，但不改变队伍归属。</p></div><div class="info-card"><div class="info-number">02</div><h3>荣耀从未消失</h3><p>被超越的纪录不再公开占榜，曾经获得的有效历史荣誉仍计入玩家累计上榜次数。</p></div></div></section>`;
+}
+function renderCarries(){
+  const labels={appearance_count:'上榜总次数',challenge_count:'通关关卡数'};
+  const primary=state.carryMetric;
+  const secondary=primary==='appearance_count'?'challenge_count':'appearance_count';
+  const rows=state.carries.filter(row=>row[primary]>0).sort((a,b)=>
+    b[primary]-a[primary]||b[secondary]-a[secondary]||a.carry_name.localeCompare(b.carry_name,'zh-CN'));
+  return `<section class="content-section"><div class="section-header"><div>
+    <h2>主 C 排行榜</h2><p class="section-subtitle">共同主 C 分别计数。跨期重复关卡按同一关计算。</p>
+    </div></div>
+    <div class="moderation-tabs">${Object.entries(labels).map(([key,label])=>`<button class="outline-button ${key===primary?'selected':''}" data-action="carry-metric" data-key="${key}" aria-pressed="${key===primary}">${label}</button>`).join('')}</div>
+    <div class="board-panel"><div class="table-scroll"><table class="players-table">
+    <thead><tr><th>名次</th><th>主 C</th><th>${labels[primary]}</th><th>${labels[secondary]}</th></tr></thead>
+    <tbody>${rows.map((row,i)=>`<tr><td>${i+1}</td><td>${esc(row.carry_name)}</td><td class="rounds">${row[primary]}</td><td>${row[secondary]}</td></tr>`).join('')||'<tr><td colspan="4">暂无可统计成绩</td></tr>'}</tbody>
+    </table></div><div class="board-foot"><span>上榜按关卡、塑造组与配队去重。通关按关卡去重，计入已审核成绩和历史档案。</span></div></div></section>`;
 }
 function renderPlayers(){
   return `<section class="content-section"><div class="section-eyebrow">HALL OF FAME</div><div class="section-header"><div><h2>玩家荣誉殿堂</h2><p class="section-subtitle">跨版本累计历史上榜次数排名，同分优先比较当前持榜数</p></div><span class="chip">ALL-TIME HONORS</span></div>
@@ -132,7 +169,7 @@ async function openSubmission(){
   openModal(`<div class="modal-eyebrow">SUBMIT A NEW RECORD</div><h2>提交挑战成绩</h2><p class="modal-subtitle">填写完整队伍与回合数，管理员核验后才会进入公开榜单。</p>
    <form id="submissionForm"><div class="form-grid"><div class="field"><label for="nickname">玩家昵称 *</label><input id="nickname" name="nickname" maxlength="24" required value="${esc(state.profile?.display_name||'')}" readonly/></div><div class="field"><label for="fVersion">游戏版本</label><select id="fVersion" name="version">${modalOptions()}</select></div></div>
    <div class="form-grid"><div class="field"><label for="fStage">挑战关卡</label><select id="fStage" name="stage">${stageOptions(state.versionId)}</select></div><div class="field"><label for="fGroup">塑造分组</label><select id="fGroup" name="group"><option value="zero" ${state.group==='zero'?'selected':''}>全0塑造</option><option value="max" ${state.group==='max'?'selected':''}>全满塑造</option></select></div></div>
-   <div class="form-grid"><div class="field"><label for="carry">主C角色 *</label><input id="carry" name="carry" required maxlength="40" placeholder="主输出角色名称"/></div><div class="field"><label for="rounds">通关回合 *</label><select id="rounds" name="rounds">${Array.from({length:7},(_,n)=>`<option value="${n}">${n} 回合</option>`).join('')}</select></div></div>
+   <div class="form-grid"><div class="field"><label for="carry">主 C 角色 *</label><input id="carry" name="carry" required maxlength="170" placeholder="共同主 C 用 / 分隔"/></div><div class="field"><label for="rounds">通关回合 *</label><select id="rounds" name="rounds">${Array.from({length:7},(_,n)=>`<option value="${n}">${n} 回合</option>`).join('')}</select></div></div>
    <div class="field"><label for="team">完整配队 *</label><textarea id="team" name="team" required placeholder="填写实际上场的角色名称"></textarea><span class="field-hint">按实际出战填写全部角色，用顿号 / 逗号分开，1—4 名，不按填写顺序区分队伍。</span></div>
    <div class="field"><label for="proof">通关截图 *</label><input id="proof" name="proof" type="file" accept="image/png,image/jpeg,image/webp" required/><span class="field-hint">支持 PNG / JPG / WebP，单张不超过 5 MB。图片仅投稿者和管理员可见。</span></div>
    <div class="field"><label for="relatedUrl">相关链接（选填）</label><input id="relatedUrl" name="relatedUrl" type="url" maxlength="2048" placeholder="https://" aria-describedby="relatedUrlHint"/><span id="relatedUrlHint" class="field-hint">可填写通关视频或攻略。成绩上榜后，链接会随该纪录公开。</span></div>
@@ -151,13 +188,18 @@ function openLogin(){
 }
 function getSubmission(form){
   const fd=new FormData(form);const team=String(fd.get('team')||'').split(/[、，,;；\n]+/).map(x=>x.trim()).filter(Boolean);
-  const nickname=String(fd.get('nickname')||'').trim();const carry=String(fd.get('carry')||'').trim();const rounds=Number(fd.get('rounds'));const file=fd.get('proof');
+  const nickname=String(fd.get('nickname')||'').trim();
+  const carries=String(fd.get('carry')||'').split(/[/／、]/).map(name=>name.trim());
+  const rounds=Number(fd.get('rounds'));const file=fd.get('proof');
   if(nickname.length<2||nickname.length>24)throw Error('玩家昵称需要 2—24 个字符。');
   if(team.length<1||team.length>4)throw Error('请填写 1—4 名实际上场角色。');
   if(team.some(x=>x.length>40))throw Error('单个角色名称不能超过 40 字符。');
   const norm=team.map(x=>x.normalize('NFKC').trim().toLowerCase());
   if(new Set(norm).size!==team.length)throw Error('配队不能填写重复角色。');
-  if(!norm.includes(carry.normalize('NFKC').trim().toLowerCase()))throw Error('主C必须属于你填写的完整队伍。');
+  const normalizedCarries=carries.map(name=>name.normalize('NFKC').trim().toLowerCase());
+  if(carries.length>4 || new Set(normalizedCarries).size!==carries.length || normalizedCarries.some(name=>!norm.includes(name))){
+    throw Error('每位主 C 都必须属于你填写的完整队伍，且只能填一次。');
+  }
   if(!Number.isInteger(rounds)||rounds<0||rounds>6)throw Error('回合数必须在 0—6 之间。');
   if(!file||!(file instanceof File)||file.size===0)throw Error('请上传通关截图。');
   if(file.size>5*1024*1024)throw Error('截图不能超过 5 MB。');
@@ -166,7 +208,7 @@ function getSubmission(form){
   const enteredUrl=String(fd.get('relatedUrl')??'').trim();
   const related_url=relatedUrl(enteredUrl);
   if(enteredUrl && !related_url)throw Error('请输入有效的 HTTP 或 HTTPS 相关链接。');
-  return {nickname,carry,team,rounds,file,related_url,stage_id:String(fd.get('stage')),group_code:String(fd.get('group'))};
+  return {nickname,carry:carries.join('/'),team,rounds,file,related_url,stage_id:String(fd.get('stage')),group_code:String(fd.get('group'))};
 }
 function decodeProof(blob) {
   return new Promise((resolve,reject)=>{
@@ -206,27 +248,45 @@ async function loadModerationRows(tab){
   if(error)throw error;
   return (data||[]).map(x=>({...x,display_name:x.profiles?.display_name||'未知玩家'}));
 }
-async function openAdmin(tab='pending'){
+const adminTabs={pending:'待审核',approved:'已通过',rejected:'已拒绝',removed:'已移除',historical:'历史档案'};
+function adminHistory(openStage){
+  return state.versions.flatMap(version=>standardStages(version.id).map(stage=>{
+    const rows=state.archives.filter(row=>row.stage_id===stage.id).sort((a,b)=>a.display_order-b.display_order);
+    if(!rows.length)return '';
+    return `<details class="review-card" ${openStage===stage.id?'open':''}>
+      <summary>${esc(version.label)} · ${esc(stage.name)} · ${rows.length} 条</summary>
+      ${rows.map(row=>`<div class="review-card"><strong>${esc(row.credited_player)}</strong>
+        <div class="review-meta">主 C ${row.carry_names.map(esc).join('／')} · ${esc(row.lineup_label)}</div>
+        <button class="reject" data-action="archive-history" data-id="${esc(row.id)}" data-stage="${esc(stage.id)}">删除档案</button>
+      </div>`).join('')}
+    </details>`;
+  })).join('')||'<p class="minor">暂无历史档案。</p>';
+}
+async function openAdmin(tab='pending',openStage=''){
   if(!state.isAdmin){toast('仅管理员可以访问管理后台。');return;}
-  if(!['pending','approved','removed'].includes(tab))tab='pending';
-  const labels={pending:'待审核',approved:'已通过',removed:'已移除'};
-  openModal(`<div class="modal-eyebrow">MODERATION CENTER · ADMIN ONLY</div><h2>排行榜管理后台</h2><p class="modal-subtitle">管理员可审核、拒绝或撤销已通过的成绩。 移除不物理删除，保留审核原因和证据。</p>
-  <div class="moderation-tabs">${Object.entries(labels).map(([key,val])=>`<button class="outline-button ${key===tab?'selected':''}" data-action="moderation-tab" data-tab="${key}">${val}</button>`).join('')}</div>
-  <div id="adminList"><div class="smaller">正在读取${labels[tab]}记录…</div></div>
-  <div class="form-actions" style="margin-top:20px"><button class="outline-button" data-action="new-version">＋ 新建版本</button><button class="outline-button" data-action="close">关闭</button></div>`,true);
+  if(!Object.hasOwn(adminTabs,tab))tab='pending';
+  openModal(`<div class="modal-eyebrow">MODERATION CENTER · ADMIN ONLY</div><h2>排行榜管理后台</h2>
+  <p class="modal-subtitle">移除可撤下已通过成绩并保留在「已移除」。删除会同时从后台列表和统计中隐藏。</p>
+  <div class="moderation-tabs">${Object.entries(adminTabs).map(([key,val])=>`<button class="outline-button ${key===tab?'selected':''}" data-action="moderation-tab" data-tab="${key}">${val}</button>`).join('')}</div>
+  <div id="adminList"><div class="smaller">正在读取${adminTabs[tab]}…</div></div>
+  <div class="form-actions" style="margin-top:20px"><button class="outline-button" data-action="manage-versions">版本管理</button><button class="outline-button" data-action="close">关闭</button></div>`,true);
+  const host=$('#adminList');
+  if(tab==='historical'){host.innerHTML=adminHistory(openStage);return;}
   try{
     const rows=await loadModerationRows(tab);
-    const host=$('#adminList'); if(!host)return;
-    host.innerHTML=rows.length?`<div class="minor admin-count">共显示 ${rows.length} 条${labels[tab]}记录${rows.length===250?'（仅展示最近250条）':''}</div>`+rows.map(r=>{
+    if(!host.isConnected)return;
+    host.innerHTML=rows.length?`<div class="minor admin-count">共显示 ${rows.length} 条${adminTabs[tab]}记录${rows.length===250?'（仅展示最近250条）':''}</div>`+rows.map(r=>{
       const stage=state.stages.find(x=>x.id===r.stage_id),version=state.versions.find(v=>v.id===stage?.version_id);
       const buttons=tab==='pending'?`<button class="approve" data-action="approve" data-id="${esc(r.id)}">✓ 审核通过</button><button class="reject" data-action="reject" data-id="${esc(r.id)}">× 拒绝成绩</button>`:
         tab==='approved'?`<button class="reject" data-action="remove-record" data-id="${esc(r.id)}">移除这条成绩</button>`:'';
       return `<article class="review-card"><div class="review-top"><strong>${esc(r.display_name)} <span class="chip">${r.rounds} 回合</span></strong><span class="minor">${dateLabel(r.created_at)}</span></div>
         <div class="review-meta">${esc(version?.label||'未知版本')} · ${esc(stage?.name||'未知关卡')} · ${r.group_code==='zero'?'全0塑造':'全满塑造'}<br>主C：${esc(r.carry_name)}　队伍：${r.team.map(esc).join(' / ')}${r.status==='removed'?`<br><strong>撤销原因：</strong>${esc(r.review_note||'未记录')}`:''}</div>
         ${relatedLink(r.related_url,true)}
-        <div id="proof-${esc(r.id)}" class="minor" role="status" style="margin-top:8px"></div><div class="review-actions"><button class="outline-button" data-action="preview" data-id="${esc(r.id)}">查看截图</button>${buttons}</div></article>`;
-    }).join(''):`<div class="empty"><div class="symbol">✓</div><h3>${labels[tab]}列表为空</h3><p>可切换其他状态查看记录。</p></div>`;
-  }catch(e){const el=$('#adminList');if(el)el.innerHTML=`<div class="notice error">读取后台失败：${esc(e.message)}</div>`;}
+        <div id="proof-${esc(r.id)}" class="minor" role="status" style="margin-top:8px"></div>
+        <div class="review-actions"><button class="outline-button" data-action="preview" data-id="${esc(r.id)}">查看截图</button>${buttons}
+        <button class="reject" data-action="archive-record" data-id="${esc(r.id)}" data-tab="${tab}">删除成绩</button></div></article>`;
+    }).join(''):`<div class="empty"><div class="symbol">✓</div><h3>${adminTabs[tab]}列表为空</h3><p>可切换其他状态查看记录。</p></div>`;
+  }catch(e){if(host.isConnected)host.innerHTML=`<div class="notice error">读取后台失败：${esc(e.message)}</div>`;}
 }
 async function review(id,approved){
   if(!state.isAdmin)return;
@@ -270,18 +330,98 @@ async function preview(id,button){
     button.disabled=false;
   }
 }
-function openVersion(){
+function openVersionManager(){
   if(!state.isAdmin)return;
-  openModal(`<div class="modal-eyebrow">NEW GAME VERSION</div><h2>新建游戏版本</h2><p class="modal-subtitle">新增版本后自动创建恰好三个关卡。</p><form id="versionForm"><div class="form-grid"><div class="field"><label>版本代号（不能重复）</label><input name="code" maxlength="30" placeholder="填写游戏版本代号" required/></div><div class="field"><label>展示名称</label><input name="label" maxlength="80" placeholder="填写游戏版本展示名称" required/></div></div>${[1,2,3].map(i=>`<div class="field"><label>第 ${i} 关名称</label><input name="stage${i}" maxlength="80" placeholder="第${i}关" required/></div>`).join('')}<div class="form-actions"><button type="button" class="outline-button" data-action="admin">返回后台</button><button type="submit" class="gold-button">创建版本</button></div></form>`);
+  openModal(`<h2>版本管理</h2><p class="modal-subtitle">每期独立显示成绩。跨期相同的关卡可以关联，主 C 双榜自动去重。</p>
+  ${state.versions.map(version=>`<article class="review-card">
+    <strong>${esc(version.label)}</strong>
+    <ul class="review-meta">${standardStages(version.id).map(stage=>`<li>${esc(stage.name)}${challengeOccurrences(stage)>1?' · 重复关卡':''}</li>`).join('')}</ul>
+    <div class="review-actions">
+      <button class="outline-button" data-action="edit-version" data-id="${esc(version.id)}">编辑版本</button>
+      <button class="reject" data-action="archive-version" data-id="${esc(version.id)}">删除版本</button>
+    </div></article>`).join('')||'<p class="minor">暂无版本。</p>'}
+  <div class="form-actions"><button class="outline-button" data-action="admin">返回审核</button>
+    <button class="gold-button" data-action="new-version">新建版本</button></div>`,true);
 }
-async function createVersion(form){
-  const fd=new FormData(form);const code=String(fd.get('code')||'').trim(),label=String(fd.get('label')||'').trim();const names=[1,2,3].map(i=>String(fd.get('stage'+i)||'').trim());
-  if(!code||!label||names.some(x=>!x))return toast('所有版本与关卡字段都必须填写。');
+function repeatOptions(stage){
+  const groups=new Map();
+  for(const version of state.versions){
+    for(const candidate of standardStages(version.id)){
+      if(candidate.id===stage?.id||groups.has(candidate.challenge_id))continue;
+      groups.set(candidate.challenge_id,`${version.code} · ${candidate.name}`);
+    }
+  }
+  if(stage&&!groups.has(stage.challenge_id))groups.set(stage.challenge_id,'保留此关目前的统计归属');
+  const distinct=stage?'取消关联，作为新的独立关卡':'作为独立关卡';
+  return `<option value="">${distinct}</option>${Array.from(groups,([id,label])=>
+    `<option value="${esc(id)}" ${id===stage?.challenge_id?'selected':''}>${esc(label)}</option>`).join('')}`;
+}
+function openVersion(id=''){
+  if(!state.isAdmin)return;
+  const version=state.versions.find(item=>item.id===id);
+  const stages=standardStages(id);
+  openModal(`<h2>${version?'编辑版本':'新建版本'}</h2>
+  <p class="modal-subtitle">如果本期关卡与往期相同，在右侧选择对应关卡。变更归属后会自动重算主 C 双榜。</p>
+  <form id="versionForm" data-id="${esc(id)}">
+    <div class="form-grid">
+      <div class="field"><label for="versionCode">版本代号</label><input id="versionCode" name="code" value="${esc(version?.code)}" maxlength="30" required/></div>
+      <div class="field"><label for="versionLabel">展示名称</label><input id="versionLabel" name="label" value="${esc(version?.label)}" maxlength="80" required/></div>
+    </div>
+    ${[1,2,3].map(i=>{
+      const stage=stages.find(item=>item.stage_no===i);
+      return `<div class="form-grid">
+        <div class="field"><label for="stage${i}">第 ${i} 关名称</label><input id="stage${i}" name="stage${i}" value="${esc(stage?.name)}" maxlength="80" required/></div>
+        <div class="field"><label for="repeat${i}">第 ${i} 关·重复关卡</label><select id="repeat${i}" name="repeat${i}">${repeatOptions(stage)}</select></div>
+      </div>`;
+    }).join('')}
+    <div class="form-actions"><button type="button" class="outline-button" data-action="manage-versions">返回版本管理</button>
+      <button type="submit" class="gold-button">保存版本</button></div>
+  </form>`,true);
+}
+async function saveVersion(form){
+  if(!state.isAdmin)return;
+  const fields=new FormData(form);
+  const code=String(fields.get('code')||'').trim();
+  const label=String(fields.get('label')||'').trim();
+  const names=[1,2,3].map(i=>String(fields.get('stage'+i)||'').trim());
+  if(!code||!label||names.some(name=>!name))return toast('请填完整版本和关卡名称。');
+  const button=form.querySelector('[type=submit]');
+  if(button.disabled)return;
+  button.disabled=true;
   try {
-    const {data:vid,error}=await sb.rpc('create_version',{p_code:code,p_label:label,p_stage_names:names});
+    const {data:vid,error}=await sb.rpc('save_version',{
+      p_version_id:form.dataset.id||null,p_code:code,p_label:label,
+      p_stage_names:names,p_challenges:[1,2,3].map(i=>fields.get('repeat'+i)||null)
+    });
     if(error)throw error;
-    state.versionId=vid;state.stageId='';state.page='leaderboard';closeModal();await refresh();toast(`已新建版本：${label}`);
-  }catch(e){toast(`新建失败：${e.message||e}`);}
+    state.versionId=vid;
+    state.stageId='';
+    await refresh();
+    openVersionManager();
+    toast('版本已保存，主 C 双榜已更新。');
+  }catch(e){toast(`保存失败：${e.message||e}`);}
+  finally{button.disabled=false;}
+}
+const adminArchiveActions={
+  'archive-record':{label:'这条成绩',rpc:'archive_submission',argument:'p_submission_id'},
+  'archive-history':{label:'这条档案',rpc:'archive_historical_record',argument:'p_record_id'},
+  'archive-version':{label:'这个版本及其榜单',rpc:'archive_version',argument:'p_version_id'}
+};
+async function archiveAdmin(button){
+  if(!state.isAdmin||button.disabled)return;
+  const {action,id,tab,stage}=button.dataset;
+  const config=adminArchiveActions[action];
+  if(!window.confirm(`删除${config.label}？删除后会从列表及统计中撤下。`))return;
+  button.disabled=true;
+  try{
+    const {error}=await sb.rpc(config.rpc,{[config.argument]:id});
+    if(error)throw error;
+    await refresh();
+    if(action==='archive-version')openVersionManager();
+    else await openAdmin(action==='archive-history'?'historical':tab,stage);
+    toast('已删除。');
+  }catch(e){toast(`删除失败：${e.message||e}`);}
+  finally{button.disabled=false;}
 }
 async function sendLogin(form){
   const email=String(new FormData(form).get('email')||'').trim();
@@ -358,6 +498,10 @@ document.addEventListener('click',async ev=>{
   if(action==='admin-login'){openLogin();return;}
   if(el.id==='adminButton'||action==='admin'){await openAdmin();return;}
   if(action==='moderation-tab'){await openAdmin(el.dataset.tab);return;}
+  if(action==='carry-metric'){
+    if(['appearance_count','challenge_count'].includes(el.dataset.key)){state.carryMetric=el.dataset.key;render();}
+    return;
+  }
   if(action==='remove-record'){await removeRecord(el.dataset.id);return;}
   if(action==='close'){closeModal();return;}
   if(action==='stage'){state.stageId=el.dataset.id;render();return;}
@@ -365,7 +509,9 @@ document.addEventListener('click',async ev=>{
   if(action==='refresh'){await init();if(state.connected)toast('榜单已更新。');return;}
   if(action==='approve'||action==='reject'){await review(el.dataset.id,action==='approve');return;}
   if(action==='preview'){await preview(el.dataset.id,el);return;}
-  if(action==='new-version'){openVersion();return;}
+  if(action==='manage-versions'){openVersionManager();return;}
+  if(action==='new-version'||action==='edit-version'){openVersion(el.dataset.id||'');return;}
+  if(Object.hasOwn(adminArchiveActions,action)){await archiveAdmin(el);return;}
   if(action==='logout'){await sb.auth.signOut();closeModal();await syncAuth();toast('已退出登录。');return;}
 });
 document.addEventListener('change',ev=>{
@@ -374,7 +520,7 @@ document.addEventListener('change',ev=>{
 });
 document.addEventListener('submit',async ev=>{
   const form=ev.target;if(!['submissionForm','guestForm','loginForm','profileForm','versionForm'].includes(form.id))return;
-  ev.preventDefault();if(form.id==='submissionForm')await submitRecord(form);if(form.id==='guestForm')await startGuest(form);if(form.id==='loginForm')await sendLogin(form);if(form.id==='profileForm')await saveProfile(form);if(form.id==='versionForm')await createVersion(form);
+  ev.preventDefault();if(form.id==='submissionForm')await submitRecord(form);if(form.id==='guestForm')await startGuest(form);if(form.id==='loginForm')await sendLogin(form);if(form.id==='profileForm')await saveProfile(form);if(form.id==='versionForm')await saveVersion(form);
 });
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape')closeModal();});
 document.addEventListener('click',ev=>{if(ev.target.id==='overlay')closeModal();});
