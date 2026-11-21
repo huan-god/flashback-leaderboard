@@ -114,7 +114,10 @@ create index if not exists record_history_player_idx on public.record_history(pl
 
 create or replace function public.is_admin()
 returns boolean language sql stable security definer set search_path = '' as $$
-  select exists(select 1 from public.admins where user_id=auth.uid())
+  select exists (
+    select 1 from public.admins a join auth.users u on u.id = a.user_id
+    where u.id = auth.uid() and not u.is_anonymous and u.email_confirmed_at is not null
+  )
 $$;
 
 alter table public.profiles enable row level security;
@@ -124,7 +127,14 @@ alter table public.stages enable row level security;
 alter table public.submissions enable row level security;
 alter table public.record_history enable row level security;
 
-create policy "profiles readable" on public.profiles for select to anon, authenticated using (true);
+create policy "profiles readable" on public.profiles for select to anon, authenticated using (
+  id = (select auth.uid())
+  or (select public.is_admin())
+  or exists (
+    select 1 from public.submissions s
+    where s.player_id = profiles.id and s.status = 'approved'
+  )
+);
 create policy "profiles insert self" on public.profiles for insert to authenticated with check (id = (select auth.uid()));
 create policy "profiles update self" on public.profiles for update to authenticated using (id=(select auth.uid())) with check (id=(select auth.uid()));
 create policy "admins only see self" on public.admins for select to authenticated using(user_id=(select auth.uid()));
