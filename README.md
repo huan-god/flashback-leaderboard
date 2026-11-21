@@ -8,11 +8,11 @@
 - Ⅱ · 余辉／仪式
 - Ⅲ · 术具／仪式
 
-玩家可用昵称投稿，当前浏览器会保留投稿身份。通关截图仅投稿者和授权审核员可读取。审核通过后，同一期、同关卡、同塑造组和完整阵容只记录一个最低回合成绩，同回合按服务器提交时间排序。
+玩家可用昵称投稿，当前浏览器会保留投稿身份。通关截图仅投稿者和授权审核员可读取。玩家可选填通关视频、攻略等相关链接，随上榜纪录公开。审核通过后，同一期、同关卡、同塑造组和完整阵容只记录一个最低回合成绩，同回合按服务器提交时间排序。
 
 ## 部署
 
-GitHub Pages 从 `main` 根目录发布静态网页，Supabase 提供登录、榜单、审核与私有截图存储。新项目先运行 `supabase/schema.sql`，再运行 `supabase/seed_4_1.sql`。已有 V1 数据库先备份，再用 `supabase/002_remove_records.sql` 更新。
+GitHub Pages 从 `main` 根目录发布静态网页，Supabase 提供登录、榜单、审核与私有截图存储。新项目依次运行 `supabase/schema.sql`、`supabase/003_related_links.sql` 和 `supabase/seed_4_1.sql`。已有 V1 数据库先备份，再依次应用 `002_remove_records.sql` 和 `003_related_links.sql`。已有 V2 数据库只需应用 `003_related_links.sql`。
 
 将项目 URL 和 publishable key 写入 `config.js`。在 Supabase Auth 启用匿名登录和邮箱登录，将 Pages 的完整网址填写为 Site URL 并加入 Redirect URLs。审核员须使用已验证的邮箱账号，并由项目所有者授权。管理密钥不得提交至仓库。
 

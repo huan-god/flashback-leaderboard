@@ -4,6 +4,22 @@ const config = window.FLASHBACK_CONFIG || {};
 const hasBackendConfig = Boolean(config.supabaseUrl && config.supabaseAnonKey);
 const $ = (s) => document.querySelector(s);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function relatedUrl(value) {
+  const trimmed=String(value??'').trim();
+  if(!/^https?:\/\//i.test(trimmed) || /[\s\\]/u.test(trimmed))return null;
+  try {
+    const url=new URL(trimmed);
+    return url.hostname && !url.username && !url.password && url.href.length<=2048 ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+function relatedLink(value, showHost=false) {
+  const url=relatedUrl(value);
+  if(!url)return '';
+  const label=showHost ? new URL(url).hostname : '相关链接';
+  return `<div class="smaller"><a class="text-button" href="${esc(url)}" target="_blank" rel="noopener noreferrer ugc">${esc(label)} ↗</a></div>`;
+}
 const dateLabel = v => {try{return new Date(v).toLocaleString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});}catch{return '—';}};
 const uid = () => crypto.randomUUID?.() || String(Date.now())+'_'+Math.random().toString(36).slice(2);
 let sb = null;
@@ -85,7 +101,7 @@ function renderLeaderboard(){
     <div class="filter-divider"></div><div class="filter-label">02 / 塑造限制</div><div class="group-switch"><button data-action="group" data-group="zero" class="${state.group==='zero'?'active':''}">全0塑造</button><button data-action="group" data-group="max" class="${state.group==='max'?'active':''}">全满塑造</button></div>
     <div class="filter-hint">✦ 每个版本有三个关卡。<br />✦ 仅收录 <strong>0—6 回合</strong> 通关。<br />✦ 不同阵容独立保留最佳纪录。<br />✦ 分数并列按提交时间优先。</div></aside>
     <div class="board-panel"><div class="board-head"><div><h3>${esc(st?.name||'暂无关卡')} <span style="font-size:13px;color:var(--gold)">/ ${state.group==='zero'?'全0塑造':'全满塑造'}</span></h3><p>${esc(ver?.label||'尚未配置版本')} · 共 ${rows.length} 个当前纪录</p></div><span class="chip">✧ 已审核通过</span></div>
-    ${rows.length?`<div class="table-scroll"><table class="board-table"><thead><tr><th>排序</th><th>纪录保持者</th><th>主 C / 队伍</th><th>回合</th><th>首次上传</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td><span class="rank-icon ${i===0?'first':''}">${String(i+1).padStart(2,'0')}</span></td><td><span class="player-name">${esc(r.display_name)}</span><div class="smaller">唯一纪录保持者</div></td><td><div style="font-size:12px;color:var(--gold);margin-bottom:6px">主C · ${esc(r.carry_name)}</div><div class="team-pills">${r.team.map(n=>`<span class="team-pill">${esc(n)}</span>`).join('')}</div></td><td><span class="rounds">${r.rounds}<small>回合</small></span></td><td><span class="smaller">${dateLabel(r.created_at)}</span></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><div class="symbol">✧</div><h3>当前榜单为空</h3><p>${state.connected?'尚无通过审核的成绩。':'投稿服务暂未开放。'} </p>${canSubmit()?'<button class="gold-button" data-action="submit">投稿成绩 →</button>':''}</div>`}
+    ${rows.length?`<div class="table-scroll"><table class="board-table"><thead><tr><th>排序</th><th>纪录保持者</th><th>主 C / 队伍</th><th>回合</th><th>首次上传</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td><span class="rank-icon ${i===0?'first':''}">${String(i+1).padStart(2,'0')}</span></td><td><span class="player-name">${esc(r.display_name)}</span><div class="smaller">唯一纪录保持者</div></td><td><div style="font-size:12px;color:var(--gold);margin-bottom:6px">主C · ${esc(r.carry_name)}</div><div class="team-pills">${r.team.map(n=>`<span class="team-pill">${esc(n)}</span>`).join('')}</div>${relatedLink(r.related_url)}</td><td><span class="rounds">${r.rounds}<small>回合</small></span></td><td><span class="smaller">${dateLabel(r.created_at)}</span></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><div class="symbol">✧</div><h3>当前榜单为空</h3><p>${state.connected?'尚无通过审核的成绩。':'投稿服务暂未开放。'} </p>${canSubmit()?'<button class="gold-button" data-action="submit">投稿成绩 →</button>':''}</div>`}
     <div class="board-foot"><span>以服务器上传时间为准 · 审核后自动更新榜单</span><button class="text-button" data-action="refresh">刷新榜单 ↻</button></div></div></div>
     <div class="two-cards"><div class="info-card"><div class="info-number">01</div><h3>一队 · 一纪录</h3><p>相同关卡、塑造组和完整阵容，仅保留回合最少的一条记录。主C单独显示，但不改变队伍归属。</p></div><div class="info-card"><div class="info-number">02</div><h3>荣耀从未消失</h3><p>被超越的纪录不再公开占榜，曾经获得的有效历史荣誉仍计入玩家累计上榜次数。</p></div></div></section>`;
 }
@@ -119,6 +135,7 @@ async function openSubmission(){
    <div class="form-grid"><div class="field"><label for="carry">主C角色 *</label><input id="carry" name="carry" required maxlength="40" placeholder="主输出角色名称"/></div><div class="field"><label for="rounds">通关回合 *</label><select id="rounds" name="rounds">${Array.from({length:7},(_,n)=>`<option value="${n}">${n} 回合</option>`).join('')}</select></div></div>
    <div class="field"><label for="team">完整配队 *</label><textarea id="team" name="team" required placeholder="填写实际上场的角色名称"></textarea><span class="field-hint">按实际出战填写全部角色，用顿号 / 逗号分开，1—4 名，不按填写顺序区分队伍。</span></div>
    <div class="field"><label for="proof">通关截图 *</label><input id="proof" name="proof" type="file" accept="image/png,image/jpeg,image/webp" required/><span class="field-hint">支持 PNG / JPG / WebP，单张不超过 5 MB。图片仅投稿者和管理员可见。</span></div>
+   <div class="field"><label for="relatedUrl">相关链接（选填）</label><input id="relatedUrl" name="relatedUrl" type="url" maxlength="2048" placeholder="https://" aria-describedby="relatedUrlHint"/><span id="relatedUrlHint" class="field-hint">可填写通关视频或攻略。成绩上榜后，链接会随该纪录公开。</span></div>
    <div class="form-note">按服务器记录的提交时间处理同回合成绩。</div>
    <div class="form-actions"><button type="button" class="outline-button" data-action="close">取消</button><button class="gold-button" id="submissionConfirm" type="submit">确认提交 →</button></div></form>`);
 }
@@ -146,7 +163,24 @@ function getSubmission(form){
   if(file.size>5*1024*1024)throw Error('截图不能超过 5 MB。');
   if(!['image/png','image/jpeg','image/webp'].includes(file.type))throw Error('截图只支持 PNG、JPG 和 WebP。');
   if(!state.stages.some(s=>s.id===fd.get('stage')&&s.version_id===fd.get('version')))throw Error('版本与关卡不匹配。');
-  return {nickname,carry,team,rounds,file,stage_id:String(fd.get('stage')),group_code:String(fd.get('group'))};
+  const enteredUrl=String(fd.get('relatedUrl')??'').trim();
+  const related_url=relatedUrl(enteredUrl);
+  if(enteredUrl && !related_url)throw Error('请输入有效的 HTTP 或 HTTPS 相关链接。');
+  return {nickname,carry,team,rounds,file,related_url,stage_id:String(fd.get('stage')),group_code:String(fd.get('group'))};
+}
+function decodeProof(blob) {
+  return new Promise((resolve,reject)=>{
+    if(!blob?.size){reject(Error('截图文件为空。'));return;}
+    const reader=new FileReader();
+    reader.onerror=()=>reject(Error('截图文件读取失败。'));
+    reader.onload=()=>{
+      const image=new Image();
+      image.onload=()=>resolve(image);
+      image.onerror=()=>reject(Error('截图无法解码，请检查原图是否能正常打开。'));
+      image.src=reader.result;
+    };
+    reader.readAsDataURL(blob);
+  });
 }
 async function submitRecord(form){
   const button=$('#submissionConfirm');
@@ -155,18 +189,19 @@ async function submitRecord(form){
   button.textContent='正在提交…';
   try {
     const v=getSubmission(form);
+    await decodeProof(v.file);
     const ext={ 'image/png':'png', 'image/webp':'webp', 'image/jpeg':'jpg' }[v.file.type];
     const path=state.user.id+'/'+uid()+'.'+ext;
     const {error:uploadError}=await sb.storage.from('proofs').upload(path,v.file,{contentType:v.file.type,upsert:false});
     if(uploadError)throw uploadError;
-    const {error}=await sb.from('submissions').insert({player_id:state.user.id,stage_id:v.stage_id,group_code:v.group_code,team:v.team,carry_name:v.carry,rounds:v.rounds,evidence_path:path});
+    const {error}=await sb.from('submissions').insert({player_id:state.user.id,stage_id:v.stage_id,group_code:v.group_code,team:v.team,carry_name:v.carry,rounds:v.rounds,evidence_path:path,related_url:v.related_url});
     if(error)throw error;
     closeModal();await refresh();toast('已提交，当前状态：等待管理员审核。');
   }catch(e){toast(`投稿失败：${e.message||e}`);button.disabled=false;button.textContent='确认提交 →';}
 }
 async function loadModerationRows(tab){
   const {data,error}=await sb.from('submissions')
-    .select('id,player_id,stage_id,group_code,team,carry_name,rounds,created_at,status,evidence_path,review_note,profiles(display_name)')
+    .select('id,player_id,stage_id,group_code,team,carry_name,rounds,created_at,status,related_url,review_note,profiles(display_name)')
     .eq('status',tab).order('created_at',{ascending:false}).limit(250);
   if(error)throw error;
   return (data||[]).map(x=>({...x,display_name:x.profiles?.display_name||'未知玩家'}));
@@ -188,7 +223,8 @@ async function openAdmin(tab='pending'){
         tab==='approved'?`<button class="reject" data-action="remove-record" data-id="${esc(r.id)}">移除这条成绩</button>`:'';
       return `<article class="review-card"><div class="review-top"><strong>${esc(r.display_name)} <span class="chip">${r.rounds} 回合</span></strong><span class="minor">${dateLabel(r.created_at)}</span></div>
         <div class="review-meta">${esc(version?.label||'未知版本')} · ${esc(stage?.name||'未知关卡')} · ${r.group_code==='zero'?'全0塑造':'全满塑造'}<br>主C：${esc(r.carry_name)}　队伍：${r.team.map(esc).join(' / ')}${r.status==='removed'?`<br><strong>撤销原因：</strong>${esc(r.review_note||'未记录')}`:''}</div>
-        <div id="proof-${esc(r.id)}" class="minor" style="margin-top:8px"></div><div class="review-actions"><button class="outline-button" data-action="preview" data-id="${esc(r.id)}">查看截图</button>${buttons}</div></article>`;
+        ${relatedLink(r.related_url,true)}
+        <div id="proof-${esc(r.id)}" class="minor" role="status" style="margin-top:8px"></div><div class="review-actions"><button class="outline-button" data-action="preview" data-id="${esc(r.id)}">查看截图</button>${buttons}</div></article>`;
     }).join(''):`<div class="empty"><div class="symbol">✓</div><h3>${labels[tab]}列表为空</h3><p>可切换其他状态查看记录。</p></div>`;
   }catch(e){const el=$('#adminList');if(el)el.innerHTML=`<div class="notice error">读取后台失败：${esc(e.message)}</div>`;}
 }
@@ -214,16 +250,25 @@ async function removeRecord(id){
     await refresh();await openAdmin('approved');toast('成绩已移除，排行榜与玩家荣誉已重新计算。');
   }catch(e){toast(`移除失败：${e.message||e}`);}
 }
-async function preview(id){
-  const root=document.getElementById(`proof-${id}`);if(!root)return;
+async function preview(id,button){
+  const root=document.getElementById(`proof-${id}`);
+  if(!state.isAdmin||!root||button.disabled)return;
+  button.disabled=true;
+  root.textContent='正在读取截图…';
   try{
     const {data,error}=await sb.from('submissions').select('evidence_path').eq('id',id).single();
     if(error)throw error;
-    const {data:signed,error:signError}=await sb.storage.from('proofs').createSignedUrl(data.evidence_path,60);
-    if(signError)throw signError;
-    const url=signed.signedUrl;
-    root.innerHTML=`<img alt="投稿成绩截图" style="max-width:100%;max-height:410px;border:1px solid #6e5d52" src="${esc(url)}"/>`;
-  }catch(e){root.textContent=`查看失败：${e.message}`;}
+    const {data:blob,error:downloadError}=await sb.storage.from('proofs').download(data.evidence_path);
+    if(downloadError)throw downloadError;
+    const image=await decodeProof(blob);
+    image.alt='投稿成绩截图';
+    image.style.cssText='max-width:100%;max-height:410px;border:1px solid #6e5d52;object-fit:contain';
+    if(root.isConnected)root.replaceChildren(image);
+  }catch(e){
+    if(root.isConnected)root.textContent=`查看失败：${e.message||e}`;
+  }finally{
+    button.disabled=false;
+  }
 }
 function openVersion(){
   if(!state.isAdmin)return;
@@ -319,7 +364,7 @@ document.addEventListener('click',async ev=>{
   if(action==='group'){state.group=el.dataset.group;render();return;}
   if(action==='refresh'){await init();if(state.connected)toast('榜单已更新。');return;}
   if(action==='approve'||action==='reject'){await review(el.dataset.id,action==='approve');return;}
-  if(action==='preview'){await preview(el.dataset.id);return;}
+  if(action==='preview'){await preview(el.dataset.id,el);return;}
   if(action==='new-version'){openVersion();return;}
   if(action==='logout'){await sb.auth.signOut();closeModal();await syncAuth();toast('已退出登录。');return;}
 });
