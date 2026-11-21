@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#101016" />
+  <meta name="description" content="重返未来：1999 焦点闪回非官方玩家排行榜：记录三个关卡、两种塑造组的最佳阵容纪录与玩家荣誉。" />
+  <title>焦点闪回 · 玩家排行榜</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script src="./config.js"></script>
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="#home" aria-label="焦点闪回首页">
+      <span class="brand-seal" aria-hidden="true">Ⅸ</span>
+      <span><strong>焦点闪回</strong><small>FLASHBACK ARCHIVE</small></span>
+    </a>
+    <nav class="topnav" aria-label="主要导航">
+      <button class="nav-link active" data-page="leaderboard">排行榜</button>
+      <button class="nav-link" data-page="players">玩家荣誉</button>
+      <button class="nav-link" data-page="rules">榜单规则</button>
+    </nav>
+    <div class="top-actions">
+      <span id="connectionTag" class="mode-tag">本地演示</span>
+      <button id="userButton" class="ghost-button">访客登录</button>
+      <button id="submitButton" class="gold-button small"><span>＋</span> 投稿成绩</button>
+    </div>
+  </header>
+
+  <main class="main-shell">
+    <section class="hero" id="hero">
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> REVERSE: 1999 · COMMUNITY RECORDS</div>
+        <h1>时间会抹去痕迹，<br /><em>纪录会留下名字。</em></h1>
+        <p>焦点闪回玩家排行榜。每版本三个关卡，零塑与满塑独立排名；每种阵容仅有一位纪录保持者。</p>
+        <div class="hero-buttons">
+          <button class="gold-button" data-page="leaderboard">查看本期榜单 <span>↗</span></button>
+          <button class="outline-button" id="heroSubmit">提交我的纪录 <span>↗</span></button>
+        </div>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="astral-orbit orb-1"></div><div class="astral-orbit orb-2"></div>
+        <div class="tick-ring"></div><div class="moon-disk"><div class="moon-line">∞</div><div class="moon-roman">XIX</div></div>
+        <div class="art-star star-a">✦</div><div class="art-star star-b">✧</div>
+        <div class="art-label l1">ARCHIVE<br />NO. 01999</div><div class="art-label l2">THE TIME<br />IS YOURS</div>
+      </div>
+      <div class="hero-bottom"><span>✧ 非官方玩家共建项目</span><span>UNDER THE STORM · 1999</span></div>
+    </section>
+
+    <section class="metric-strip" aria-label="网站统计">
+      <div class="metric"><span class="metric-icon">◇</span><div><strong id="metricRecords">—</strong><small>当前有效纪录</small></div></div>
+      <div class="metric"><span class="metric-icon">♙</span><div><strong id="metricPlayers">—</strong><small>参与玩家</small></div></div>
+      <div class="metric"><span class="metric-icon">▣</span><div><strong id="metricVersions">—</strong><small>收录版本</small></div></div>
+      <div class="metric metric-last"><span class="metric-icon">⌁</span><div><strong>06</strong><small>限定回合以内</small></div></div>
+    </section>
+
+    <div id="content"></div>
+  </main>
+
+  <footer class="footer"><div><b>焦点闪回</b> · PLAYER RECORD ARCHIVE <span class="footer-ornament">✦</span> <span>幻化凌风 · 玩家共创企划</span></div><p>本网站为非官方玩家社区项目，与游戏发行方无隶属关系。请勿在成绩截图中公开个人敏感信息。</p></footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="modalRoot"></div>
+</body>
+</html>
