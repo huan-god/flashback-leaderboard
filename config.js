@@ -1,7 +1,5 @@
-// 将以下两项替换为 Supabase 项目中的 Project URL 和 Publishable/anon Key。
-// 这两项可出现在前端；绝对不要在这里填写 service_role 或 secret key。
-// 未配置时自动进入可交互的本地演示模式，演示数据只保存在当前浏览器。
+// GitHub Pages 只使用 Supabase 的 publishable key。管理密钥必须留在服务端。
 window.FLASHBACK_CONFIG = {
-  supabaseUrl: '',
-  supabaseAnonKey: ''
+  supabaseUrl: 'https://bnkqttkytjggtrnpjssn.supabase.co',
+  supabaseAnonKey: 'sb_publishable_b3t-M_Vci6qbEgWOQW9B6g_WsCl_yPG'
 };

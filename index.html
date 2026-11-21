@@ -7,8 +7,8 @@
   <meta name="description" content="重返未来：1999 焦点闪回非官方玩家排行榜：记录三个关卡、两种塑造组的最佳阵容纪录与玩家荣誉。" />
   <title>焦点闪回 · 玩家排行榜</title>
   <link rel="stylesheet" href="./styles.css" />
-  <script src="./config.js"></script>
-  <script type="module" src="./app.js"></script>
+  <script src="./config.js?v=production"></script>
+  <script type="module" src="./app.js?v=production"></script>
 </head>
 <body>
   <div class="noise" aria-hidden="true"></div>
@@ -23,9 +23,9 @@
       <button class="nav-link" data-page="rules">榜单规则</button>
     </nav>
     <div class="top-actions">
-      <span id="connectionTag" class="mode-tag">本地演示</span>
-      <button id="userButton" class="ghost-button">访客登录</button>
-      <button id="submitButton" class="gold-button small"><span>＋</span> 投稿成绩</button>
+      <span id="connectionTag" class="mode-tag">正在加载</span>
+      <button id="userButton" hidden class="ghost-button">管理员登录</button>
+      <button id="submitButton" disabled class="gold-button small"><span>＋</span> 投稿成绩</button>
     </div>
   </header>
 
@@ -37,7 +37,7 @@
         <p>焦点闪回玩家排行榜。每版本三个关卡，零塑与满塑独立排名；每种阵容仅有一位纪录保持者。</p>
         <div class="hero-buttons">
           <button class="gold-button" data-page="leaderboard">查看本期榜单 <span>↗</span></button>
-          <button class="outline-button" id="heroSubmit">提交我的纪录 <span>↗</span></button>
+          <button class="outline-button" id="heroSubmit" disabled>提交我的纪录 <span>↗</span></button>
         </div>
       </div>
       <div class="hero-art" aria-hidden="true">
