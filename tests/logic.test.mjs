@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {canonicalTeam,chooseWinners,compareRecord,playerRanking} from '../logic.mjs';
+import {canonicalTeam,chooseWinners,compareRecord,playerRanking,validateLineup} from '../logic.mjs';
 const make = (id,player,rounds,time,team=['甲','乙','丙','丁'],group='zero',stage='s1',status='approved') => ({id,player_id:player,display_name:player,status,rounds,created_at:time,team,group_code:group,stage_id:stage});
 test('complete team order does not split a record slot',()=>{
   assert.equal(canonicalTeam(['乙','甲']), canonicalTeam(['甲','乙']));
@@ -22,6 +22,37 @@ test('different team, stage or group each has a separate slot',()=>{
   const c=make('c','丙',1,'2026-01-03', ['甲','乙'], 'max');
   const d=make('d','丁',1,'2026-01-04', ['甲','乙'], 'zero', 's2');
   assert.equal(chooseWinners([a,b,c,d]).length,4);
+});
+const core = ['露西','哑谜','乌尔里希'];
+const optional = [...core,'小瑞安侬／卡戎'];
+
+test('a shorter subset beats every larger lineup in its own stage and division',()=>{
+  const short=make('short','选手一',6,'2026-11-22',core);
+  const long=make('long','选手二',1,'2026-11-21',optional);
+  const different=make('different','选手三',1,'2026-11-21',['露西','哑谜','小瑞安侬','卡戎']);
+  const max=make('max','选手四',1,'2026-11-21',optional,'max');
+  assert.deepEqual(new Set(chooseWinners([short,long,different,max]).map(r=>r.id)),new Set(['short','different','max']));
+});
+
+test('a result using one named alternative only displaces that concrete lineup',()=>{
+  const options=make('options','选手一',4,'2026-11-21',optional);
+  const fast=make('fast','选手二',3,'2026-11-22',['卡戎',...core]);
+  const rows=chooseWinners([options,fast]);
+  assert.equal(rows[0].id,'fast');
+  assert.deepEqual(rows[1].team,[...core,'小瑞安侬']);
+  assert.equal(chooseWinners([options])[0].team[3],'卡戎/小瑞安侬');
+});
+
+test('a legacy one-cell shorthand cannot suppress a precise lineup',()=>{
+  const legacy={...make('archive','选手一',6,'2026-11-21',['露西/哑谜']),source_history_id:'archive-row'};
+  const fresh=make('fresh','选手二',2,'2026-11-22',core);
+  assert.equal(chooseWinners([legacy,fresh]).length,2);
+});
+
+test('an alternative slot needs distinct names with both sides filled',()=>{
+  assert.doesNotThrow(()=>validateLineup(optional));
+  assert.throws(()=>validateLineup([...core,'哑谜/卡戎']),/重复/);
+  assert.throws(()=>validateLineup([...core,'小瑞安侬/']),/两侧/);
 });
 test('pending or rejected submissions do not enter leaderboard',()=>{
   const approved=make('a','甲',5,'2026-01-01');

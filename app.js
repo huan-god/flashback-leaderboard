@@ -1,4 +1,4 @@
-import {compareRecord} from './logic.mjs';
+import {compareRecord,validateLineup} from './logic.mjs?v=lineup-1';
 import {
   adminContact, askRejectionReason, contactField, mountSubmissionProgress,
   bindModerationFilters, filterModerationRows, moderationFilterFields, moderationPager, moderationPageSize
@@ -178,19 +178,19 @@ function renderLeaderboard(){
     `<option value="${esc(key)}" ${key===state.carryFilter?'selected':''}>${esc(name)}</option>`).join('');
   const options=state.versions.map(x=>`<option value="${esc(x.id)}" ${state.versionId===x.id?'selected':''}>${esc(x.label)}</option>`).join('');
   return `<section class="content-section"><div class="section-eyebrow">LATEST RECORDS</div>
-    <div class="section-header"><div><h2>焦点闪回 · 排行榜</h2><p class="section-subtitle">同一阵容展示最短回合 · 同分先上传者优先</p></div><select id="versionSelect" class="version-select" aria-label="选择版本">${options}</select></div>
+    <div class="section-header"><div><h2>焦点闪回 · 排行榜</h2><p class="section-subtitle">同阵容少人优先 · 人数相同则比回合</p></div><select id="versionSelect" class="version-select" aria-label="选择版本">${options}</select></div>
     <div class="board-wrap"><aside class="filter-panel"><div class="filter-title">选择挑战 <span class="filter-small">STAGE SELECT</span></div><div class="filter-divider"></div><div class="filter-label">01 / 关卡</div>
     <div class="stage-options">${stages.map(x=>`<button class="stage-button ${state.stageId===x.id?'active':''}" data-action="stage" data-id="${esc(x.id)}"><span class="stage-num">0${x.stage_no}</span><span class="stage-name">${esc(x.name)}${challengeOccurrences(x)>1?' · 重复关卡':''}</span><span class="chevron">›</span></button>`).join('')||'<p class="smaller">暂无关卡</p>'}</div>
     <div class="filter-divider"></div><div class="filter-label">02 / 塑造限制</div>${groupSwitch()}
     <div class="filter-divider"></div><label class="filter-label carry-filter-label" for="carryFilter">03 / 主 C 筛选</label>
     <select id="carryFilter" class="version-select carry-filter" ${names.size?'':'disabled'}><option value="">全部主 C</option>${carryOptions}</select>
     ${state.group==='zero'?`<div class="resonance-filter"><button class="resonance-tag" data-action="resonance-filter" aria-pressed="${resonanceOnly}">✦ 只看全0塑 · 共鸣10</button></div>`:''}
-    <div class="filter-hint">✦ 每个版本有三个关卡。<br />✦ 仅收录 <strong>0—6 回合</strong> 通关。<br />✦ 不同阵容独立保留最佳纪录。<br />✦ 分数并列按提交时间优先。</div></aside>
+    <div class="filter-hint">✦ 每个版本有三个关卡。<br />✦ 仅收录 <strong>0—6 回合</strong> 通关。<br />✦ 四人队包含三人队的全部角色时，三人队胜出。<br />✦ 同阵容先比回合，并列按提交时间。</div></aside>
     <div class="board-panel"><div class="board-head"><div><h3>${esc(st?.name||'暂无关卡')} <span style="font-size:13px;color:var(--gold)">/ ${state.group==='zero'?'全0塑造':'全满塑造'}</span></h3><p>${esc(ver?.label||'尚未配置版本')} · ${archives.length&&!rows.length?`${archives.length} 条历史档案`:`${rows.length} 个当前纪录${archives.length?` · ${archives.length} 条历史档案`:''}`}</p></div><span class="chip">${archives.length&&!rows.length?'历史档案':'✧ 已审核通过'}</span></div>
     ${rows.length?`<div class="table-scroll"><table class="board-table"><thead><tr><th>排序</th><th>玩家</th><th>主 C / 队伍</th><th>回合</th><th>首次上传</th></tr></thead><tbody>${rows.map(r=>`<tr><td><span class="rank-icon ${r.rank===1?'first':''}">${String(r.rank).padStart(2,'0')}</span></td><td><span class="player-name">${esc(r.display_name)}</span></td><td><div style="font-size:12px;color:var(--gold);margin-bottom:6px">主C · ${esc(r.carry_name)}</div><div class="team-pills">${r.team.map(n=>`<span class="team-pill">${esc(n)}</span>`).join('')}</div>${r.resonance_ten?resonanceBadge:''}${relatedLink(r.related_url)}</td><td><span class="rounds">${r.rounds}<small>回合</small></span></td><td><span class="smaller">${dateLabel(r.created_at)}</span></td></tr>`).join('')}</tbody></table></div>`:archives.length?'':`<div class="empty"><div class="symbol">✧</div><h3>${resonanceOnly?'暂无全0塑 · 共鸣10纪录':'当前榜单为空'}</h3><p>${state.connected?(resonanceOnly?'可关闭标签筛选，查看其他已通过成绩。':'尚无通过审核的成绩。'):'投稿服务暂未开放。'} </p>${canSubmit()?'<button class="gold-button" data-action="submit">投稿成绩 →</button>':''}</div>`}
     ${recordsArchive(archives)}
     <div class="board-foot"><span>以服务器上传时间为准 · 审核后自动更新榜单</span><button class="text-button" data-action="refresh">刷新榜单 ↻</button></div></div></div>
-    <div class="two-cards"><div class="info-card"><div class="info-number">01</div><h3>一队 · 一纪录</h3><p>相同关卡、塑造组和完整阵容，仅保留回合最少的一条记录。主C单独显示，但不改变队伍归属。</p></div><div class="info-card"><div class="info-number">02</div><h3>荣耀从未消失</h3><p>被超越的纪录不再公开占榜，曾经获得的有效历史荣誉仍计入玩家累计上榜次数。</p></div></div></section>`;
+    <div class="two-cards"><div class="info-card"><div class="info-number">01</div><h3>少人通关优先</h3><p>同一关卡、同一塑造组，少人队的角色都出现在多人队中时，少人队胜出。备选角色按各自的阵容比较。</p></div><div class="info-card"><div class="info-number">02</div><h3>历史上榜荣誉</h3><p>曾经获得的有效纪录仍计入玩家累计上榜次数。原始配队可在审核后台查看。</p></div></div></section>`;
 }
 function renderCarries(){
   const labels={appearance_count:'上榜总次数',challenge_count:'通关关卡数'};
@@ -221,7 +221,7 @@ function renderPlayers(){
    </tbody></table></div></div><div class="two-cards"><div class="info-card"><div class="info-number">∞</div><h3>历史上榜次数</h3><p>曾经成为某关卡、塑造组、具体阵容的纪录保持者，即记一项历史荣誉。重复夺回同一项不重复累计。</p></div><div class="info-card"><div class="info-number">✦</div><h3>当前持榜数量</h3><p>目前仍保持最佳回合的阵容数量，实时根据已经审核通过的成绩重新计算。</p></div></div></section>`;
 }
 function renderRules(){
-  const items=[['01','三个关卡','每个游戏版本独立设置三个关卡，纪录不会跨版本或关卡比较。'],['02','两种塑造','全0塑造与全满塑造分榜比较。队伍内所有参战角色必须符合所选塑造组规则。'],['03','零至六回合','只能提交 0、1、2、3、4、5、6 回合的有效成绩，上传通关截图供管理员核验。'],['04','阵容识别','提交主C与实际上场的完整队伍。相同角色组合视为同队，与角色填写顺序无关；主C并不拆分榜单。'],['05','唯一保持者','同队仅有回合最少者上榜；同回合数先提交者获胜。以数据库记录的提交时间为准，不受审核顺序影响。'],['06','历史荣誉','曾夺得同一「版本／关卡／塑造／队伍」最佳纪录，历史次数最多计一次，重夺不叠加。被取消的无效成绩不计荣誉。']];
+  const items=[['01','三个关卡','每个游戏版本独立设置三个关卡，纪录不会跨版本或关卡比较。'],['02','两种塑造','全0塑造与全满塑造分榜比较。队伍内所有参战角色必须符合所选塑造组规则。'],['03','零至六回合','只能提交 0、1、2、3、4、5、6 回合的有效成绩，上传通关截图供管理员核验。'],['04','阵容与备选','用顿号或逗号分隔出战位置。同一位置有备选角色时用 / 分隔，榜单会分别匹配各个备选。'],['05','胜负规则','阵容包含少人队的全部角色时，少人队直接胜出。完整阵容相同则先比回合，再比提交时间。'],['06','历史荣誉','曾夺得同一「版本／关卡／塑造／队伍」最佳纪录，历史次数最多计一次，重夺不叠加。被取消的无效成绩不计荣誉。']];
   return `<section class="content-section"><div class="section-eyebrow">RULES & FAIR PLAY</div><div class="section-header"><div><h2>排行榜规则与投稿须知</h2><p class="section-subtitle">只让真实、可验证的成绩留下名字</p></div></div><div class="rules-list">${items.map(i=>`<div class="rules-card"><div class="num">${i[0]}</div><h3>${i[1]}</h3><p>${i[2]}</p></div>`).join('')}</div><div class="notice" style="margin-top:22px"><strong>玩法参考：</strong>「焦点闪回」是《重返未来：1999》从 3.6 版本开始推出的周期挑战玩法，具体关卡、可用增幅与机制以游戏和 Wiki 对应期次为准。<a class="wiki-link" href="https://res1999.huijiwiki.com/wiki/%E7%84%A6%E7%82%B9%E9%97%AA%E5%9B%9E" target="_blank" rel="noopener noreferrer">查阅重返未来1999中文 Wiki · 焦点闪回 ↗</a><br>本站的 0—6 回合收录上限、全0／全满塑造分组和唯一纪录规则是<strong>社区排行榜自定义规则</strong>，并非游戏官方排名规定。</div></section>`;
 }
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('visible'),3200);}
@@ -243,7 +243,7 @@ async function openSubmission(){
    <div class="form-grid"><div class="field"><label for="fStage">挑战关卡</label><select id="fStage" name="stage">${stageOptions(state.versionId)}</select></div><div class="field"><label for="fGroup">塑造分组</label><select id="fGroup" name="group"><option value="zero" ${state.group==='zero'?'selected':''}>全0塑造</option><option value="max" ${state.group==='max'?'selected':''}>全满塑造</option></select></div></div>
    <div class="form-grid"><div class="field"><label for="carry">主 C 角色 *</label><input id="carry" name="carry" required maxlength="170" placeholder="共同主 C 用 / 分隔"/></div><div class="field"><label for="rounds">通关回合 *</label><select id="rounds" name="rounds">${Array.from({length:7},(_,n)=>`<option value="${n}">${n} 回合</option>`).join('')}</select></div></div>
    ${resonanceChoice(state.group)}
-   <div class="field"><label for="team">完整配队 *</label><textarea id="team" name="team" required placeholder="填写实际上场的角色名称"></textarea><span class="field-hint">按实际出战填写全部角色，用顿号 / 逗号分开，1—4 名，不按填写顺序区分队伍。</span></div>
+   <div class="field"><label for="team">完整配队 *</label><textarea id="team" name="team" required placeholder="露西、哑谜、乌尔里希、小瑞安侬/卡戎"></textarea><span class="field-hint">用顿号或逗号分隔 1—4 个出战位置。同一个位置的备选角色用 / 分开。</span></div>
    <div class="field"><label for="proof">通关截图 *</label><input id="proof" name="proof" type="file" accept="image/png,image/jpeg,image/webp" required/><span class="field-hint">支持 PNG / JPG / WebP，单张不超过 5 MB。图片仅投稿者和管理员可见。</span></div>
    <div class="field"><label for="relatedUrl">相关链接（选填）</label><input id="relatedUrl" name="relatedUrl" type="url" maxlength="2048" placeholder="https://" aria-describedby="relatedUrlHint"/><span id="relatedUrlHint" class="field-hint">可填写通关视频或攻略。成绩上榜后，链接会随该纪录公开。</span></div>
    <div class="form-note">按服务器记录的提交时间处理同回合成绩。</div>
@@ -269,13 +269,11 @@ function getSubmission(form){
   const carries=splitCarryNames(fd.get('carry'));
   const rounds=Number(fd.get('rounds'));const file=fd.get('proof');
   if(nickname.length<2||nickname.length>24)throw Error('玩家昵称需要 2—24 个字符。');
-  if(team.length<1||team.length>4)throw Error('请填写 1—4 名实际上场角色。');
-  if(team.some(x=>x.length>40))throw Error('单个角色名称不能超过 40 字符。');
+  validateLineup(team);
   const norm=team.map(carryKey);
-  if(new Set(norm).size!==team.length)throw Error('配队不能填写重复角色。');
   const normalizedCarries=carries.map(carryKey);
   if(carries.length>4 || new Set(normalizedCarries).size!==carries.length || normalizedCarries.some(name=>!norm.includes(name))){
-    throw Error('每位主 C 都必须属于你填写的完整队伍，且只能填一次。');
+    throw Error('每位主 C 都需要单独写在固定出战位置中，且只能填一次。');
   }
   if(!Number.isInteger(rounds)||rounds<0||rounds>6)throw Error('回合数必须在 0—6 之间。');
   if(!file||!(file instanceof File)||file.size===0)throw Error('请上传通关截图。');
@@ -412,7 +410,7 @@ async function openScoreEditor(button){
     const stageOptions=state.versions.map(version=>`<optgroup label="${esc(version.label)}">${standardStages(version.id)
       .map(stage=>`<option value="${esc(stage.id)}" ${stage.id===record.stage_id?'selected':''}>${esc(stage.name)}</option>`).join('')}</optgroup>`).join('');
     openModal(`<h2>编辑成绩</h2>
-      <form id="scoreForm" data-id="${esc(id)}" data-tab="${esc(tab)}">
+      <form id="scoreForm" data-id="${esc(id)}" data-tab="${esc(tab)}" data-imported="${Boolean(record.source_history_id)}">
         <div class="form-grid">
           <div class="field"><label for="editStage">版本及关卡</label><select id="editStage" name="stage" required>${stageOptions}</select></div>
           <div class="field"><label for="editGroup">塑造分组</label><select id="editGroup" name="group">
@@ -425,7 +423,7 @@ async function openScoreEditor(button){
         </div>
         ${resonanceChoice(record.group_code,record.resonance_ten)}
         <div class="field"><label for="editCarry">主 C</label><input id="editCarry" name="carry" value="${esc(record.carry_name)}" maxlength="170" required/><span class="field-hint">共同主 C 用 / 分隔。</span></div>
-        <div class="field"><label for="editTeam">配队</label><textarea id="editTeam" name="team" maxlength="170" required>${esc(record.team.join('、'))}</textarea><span class="field-hint">填写完整队伍时，用顿号或逗号分开。${record.source_history_id?'也可以保留原表的配队简称。':''}</span></div>
+        <div class="field"><label for="editTeam">配队</label><textarea id="editTeam" name="team" maxlength="170" required>${esc(record.team.join('、'))}</textarea><span class="field-hint">用顿号或逗号区分出战位置。同一位置的备选用 / 分开。${record.source_history_id?'旧档案可以保留原表简称。':''}</span></div>
         <div class="field"><label for="editUrl">相关链接</label><input id="editUrl" name="url" type="url" value="${esc(record.related_url)}" maxlength="2048"/></div>
         <div class="form-actions"><button type="button" class="outline-button" data-action="moderation-tab" data-tab="${esc(tab)}">返回</button>
           <button type="submit" class="gold-button">保存成绩</button></div>
@@ -443,9 +441,11 @@ async function saveScore(form){
   if(url&&!link)return toast('请输入有效的 HTTP 或 HTTPS 相关链接。');
   button.disabled=true;
   try{
+    const team=splitTeam(fields.get('team'));
+    if(form.dataset.imported!=='true')validateLineup(team);
     const {error}=await sb.rpc('edit_submission',{
       p_id:form.dataset.id,p_stage_id:fields.get('stage'),p_group:fields.get('group'),
-      p_team:splitTeam(fields.get('team')),p_carry:splitCarryNames(fields.get('carry')).join('/'),
+      p_team:team,p_carry:splitCarryNames(fields.get('carry')).join('/'),
       p_rounds:Number(fields.get('rounds')),p_credited_player:fields.get('name'),p_related_url:link,
       p_resonance_ten:fields.get('group')==='zero'&&fields.has('resonanceTen')
     });
