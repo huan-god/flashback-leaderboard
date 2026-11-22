@@ -1,4 +1,4 @@
-import {compareRecord,validateLineup} from './logic.mjs?v=lineup-2';
+import {compareRecord,validateLineup} from './logic.mjs?v=lineup-3';
 import {
   adminContact, askRejectionReason, contactField, mountSubmissionProgress,
   bindModerationFilters, filterModerationRows, moderationFilterFields, moderationPager, moderationPageSize
@@ -221,7 +221,7 @@ function renderPlayers(){
    </tbody></table></div></div><div class="two-cards"><div class="info-card"><div class="info-number">∞</div><h3>历史上榜次数</h3><p>曾经成为某关卡、塑造组、具体阵容的纪录保持者，即记一项历史荣誉。重复夺回同一项不重复累计。</p></div><div class="info-card"><div class="info-number">✦</div><h3>当前持榜数量</h3><p>目前仍保持最佳回合的阵容数量，实时根据已经审核通过的成绩重新计算。</p></div></div></section>`;
 }
 function renderRules(){
-  const items=[['01','三个关卡','每个游戏版本独立设置三个关卡，纪录不会跨版本或关卡比较。'],['02','两种塑造','全0塑造与全满塑造分榜比较。队伍内所有参战角色必须符合所选塑造组规则。'],['03','零至六回合','只能提交 0、1、2、3、4、5、6 回合的有效成绩，上传通关截图供管理员核验。'],['04','填写阵容','每条成绩填写实际出战的 1—4 名角色，用顿号或逗号分隔。每个位置只能填一名角色。'],['05','胜负规则','阵容包含少人队的全部角色时，少人队直接胜出。完整阵容相同则先比回合，再比提交时间。'],['06','历史荣誉','曾夺得同一「版本／关卡／塑造／队伍」最佳纪录，历史次数最多计一次，重夺不叠加。被取消的无效成绩不计荣誉。']];
+  const items=[['01','三个关卡','每个游戏版本独立设置三个关卡，纪录不会跨版本或关卡比较。'],['02','两种塑造','全0塑造与全满塑造分榜比较。队伍内所有参战角色必须符合所选塑造组规则。'],['03','零至六回合','只能提交 0、1、2、3、4、5、6 回合的有效成绩，上传通关截图供管理员核验。'],['04','填写阵容','用顿号或逗号分隔 1—4 个出战位置。同一位置的备选用 / 分开。备选中有具体阵容已收录时，回合必须更少。'],['05','胜负规则','阵容包含少人队的全部角色时，少人队直接胜出。完整阵容相同则先比回合，再比提交时间。'],['06','历史荣誉','曾夺得同一「版本／关卡／塑造／队伍」最佳纪录，历史次数最多计一次，重夺不叠加。被取消的无效成绩不计荣誉。']];
   return `<section class="content-section"><div class="section-eyebrow">RULES & FAIR PLAY</div><div class="section-header"><div><h2>排行榜规则与投稿须知</h2><p class="section-subtitle">只让真实、可验证的成绩留下名字</p></div></div><div class="rules-list">${items.map(i=>`<div class="rules-card"><div class="num">${i[0]}</div><h3>${i[1]}</h3><p>${i[2]}</p></div>`).join('')}</div><div class="notice" style="margin-top:22px"><strong>玩法参考：</strong>「焦点闪回」是《重返未来：1999》从 3.6 版本开始推出的周期挑战玩法，具体关卡、可用增幅与机制以游戏和 Wiki 对应期次为准。<a class="wiki-link" href="https://res1999.huijiwiki.com/wiki/%E7%84%A6%E7%82%B9%E9%97%AA%E5%9B%9E" target="_blank" rel="noopener noreferrer">查阅重返未来1999中文 Wiki · 焦点闪回 ↗</a><br>本站的 0—6 回合收录上限、全0／全满塑造分组和唯一纪录规则是<strong>社区排行榜自定义规则</strong>，并非游戏官方排名规定。</div></section>`;
 }
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('visible'),3200);}
@@ -243,11 +243,12 @@ async function openSubmission(){
    <div class="form-grid"><div class="field"><label for="fStage">挑战关卡</label><select id="fStage" name="stage">${stageOptions(state.versionId)}</select></div><div class="field"><label for="fGroup">塑造分组</label><select id="fGroup" name="group"><option value="zero" ${state.group==='zero'?'selected':''}>全0塑造</option><option value="max" ${state.group==='max'?'selected':''}>全满塑造</option></select></div></div>
    <div class="form-grid"><div class="field"><label for="carry">主 C 角色 *</label><input id="carry" name="carry" required maxlength="170" placeholder="共同主 C 用 / 分隔"/></div><div class="field"><label for="rounds">通关回合 *</label><select id="rounds" name="rounds">${Array.from({length:7},(_,n)=>`<option value="${n}">${n} 回合</option>`).join('')}</select></div></div>
    ${resonanceChoice(state.group)}
-   <div class="field"><label for="team">完整配队 *</label><textarea id="team" name="team" required placeholder="露西、哑谜、乌尔里希、小瑞安侬"></textarea><span class="field-hint">填写实际出战的 1—4 名角色，用顿号或逗号分隔，每个位置只填一名。</span></div>
+   <div class="field"><label for="team">完整配队 *</label><textarea id="team" name="team" required placeholder="露西、哑谜、乌尔里希、小瑞安侬/卡戎"></textarea><span class="field-hint">用顿号或逗号分隔 1—4 个出战位置。同一位置的备选用 / 分开。已有同队成绩时，须减少回合才能提交该队。</span></div>
    <div class="field"><label for="proof">通关截图 *</label><input id="proof" name="proof" type="file" accept="image/png,image/jpeg,image/webp" required/><span class="field-hint">支持 PNG / JPG / WebP，单张不超过 5 MB。图片仅投稿者和管理员可见。</span></div>
    <div class="field"><label for="relatedUrl">相关链接（选填）</label><input id="relatedUrl" name="relatedUrl" type="url" maxlength="2048" placeholder="https://" aria-describedby="relatedUrlHint"/><span id="relatedUrlHint" class="field-hint">可填写通关视频或攻略。成绩上榜后，链接会随该纪录公开。</span></div>
    <div class="form-note">按服务器记录的提交时间处理同回合成绩。</div>
    ${contactField}
+   <p id="submissionWarning" class="notice error" role="alert" hidden></p>
    <div class="form-actions"><button type="button" class="outline-button" data-action="close">取消</button><button class="gold-button" id="submissionConfirm" type="submit">确认提交 →</button></div></form>`);
 }
 function showGuestForm(){
@@ -304,10 +305,21 @@ function decodeProof(blob) {
 async function submitRecord(form){
   const button=$('#submissionConfirm');
   if(!canSubmit() || !state.user || !state.profile || button.disabled)return;
+  const warning=form.querySelector('#submissionWarning');
+  warning.hidden=true;
+  warning.textContent='';
   button.disabled=true;
   button.textContent='正在提交…';
   try {
     const v=getSubmission(form);
+    const {data:existing,error:checkError}=await sb.rpc('flashback_existing_lineup',{
+      p_stage_id:v.stage_id,p_group_code:v.group_code,p_team:v.team,p_rounds:v.rounds
+    });
+    if(checkError)throw checkError;
+    if(existing?.length){
+      const {matched_team,incumbent_rounds}=existing[0];
+      throw Error(`已有该队伍：${matched_team.join('、')}（${incumbent_rounds} 回合）。请提交更少回合，或移除重复的备选角色。`);
+    }
     await decodeProof(v.file);
     const ext={ 'image/png':'png', 'image/webp':'webp', 'image/jpeg':'jpg' }[v.file.type];
     const path=state.user.id+'/'+uid()+'.'+ext;
@@ -320,7 +332,12 @@ async function submitRecord(form){
     closeModal();
     if(state.page==='submissions')render();
     toast('已提交，可在「我的投稿」查看审核进度。');
-  }catch(e){toast(`投稿失败：${e.message||e}`);button.disabled=false;button.textContent='确认提交 →';}
+  }catch(e){
+    warning.textContent=e.message||String(e);
+    warning.hidden=false;
+    button.disabled=false;
+    button.textContent='确认提交 →';
+  }
 }
 const moderationFilters={tab:'',name:'',location:'',division:'',page:0};
 async function loadModerationRows(tab){
@@ -423,7 +440,7 @@ async function openScoreEditor(button){
         </div>
         ${resonanceChoice(record.group_code,record.resonance_ten)}
         <div class="field"><label for="editCarry">主 C</label><input id="editCarry" name="carry" value="${esc(record.carry_name)}" maxlength="170" required/><span class="field-hint">共同主 C 用 / 分隔。</span></div>
-        <div class="field"><label for="editTeam">配队</label><textarea id="editTeam" name="team" maxlength="170" data-original-team="${esc(JSON.stringify(record.team))}" required>${esc(record.team.join('、'))}</textarea><span class="field-hint">修改配队时，填写 1—4 名角色，每个位置一名。</span></div>
+        <div class="field"><label for="editTeam">配队</label><textarea id="editTeam" name="team" maxlength="170" data-original-team="${esc(JSON.stringify(record.team))}" required>${esc(record.team.join('、'))}</textarea><span class="field-hint">用顿号或逗号分隔 1—4 个出战位置，同一位置的备选用 / 分开。</span></div>
         <div class="field"><label for="editUrl">相关链接</label><input id="editUrl" name="url" type="url" value="${esc(record.related_url)}" maxlength="2048"/></div>
         <div class="form-actions"><button type="button" class="outline-button" data-action="moderation-tab" data-tab="${esc(tab)}">返回</button>
           <button type="submit" class="gold-button">保存成绩</button></div>
