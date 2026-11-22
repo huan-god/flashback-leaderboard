@@ -1,10 +1,13 @@
 const characterKey = name => String(name).normalize('NFKC').trim().toLowerCase();
 const choicesFor = team => team.map(slot => slot.split(/[/／]/).map(name => name.trim()));
 
-export function validateLineup(team) {
+export function validateLineup(team, {allowAlternatives=false} = {}) {
   if (team.length < 1 || team.length > 4) throw Error('请填写 1—4 个出战位置。');
   if (team.some(slot => Array.from(slot).length > 40)) throw Error('每个出战位置最多填写 40 个字符。');
   const slots = choicesFor(team);
+  if (!allowAlternatives && slots.some(choices => choices.length > 1)) {
+    throw Error('每个出战位置只能填一名角色，请用顿号或逗号分隔不同位置。');
+  }
   if (slots.filter(choices => choices.length > 1).length > 1) {
     throw Error('请将 / 备选填写在同一个出战位置。');
   }
@@ -29,7 +32,7 @@ export function chooseWinners(rows) {
     let variants = [row.team];
     let opaque = Boolean(row.source_history_id) && row.team.length === 1;
     if (!opaque) {
-      try { validateLineup(row.team); } catch { opaque = true; }
+      try { validateLineup(row.team,{allowAlternatives:true}); } catch { opaque = true; }
     }
     if (!opaque) {
       const slots = choicesFor(row.team);

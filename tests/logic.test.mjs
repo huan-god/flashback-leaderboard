@@ -49,10 +49,11 @@ test('a legacy one-cell shorthand cannot suppress a precise lineup',()=>{
   assert.equal(chooseWinners([legacy,fresh]).length,2);
 });
 
-test('an alternative slot needs distinct names with both sides filled',()=>{
-  assert.doesNotThrow(()=>validateLineup(optional));
-  assert.throws(()=>validateLineup([...core,'哑谜/卡戎']),/重复/);
-  assert.throws(()=>validateLineup([...core,'小瑞安侬/']),/两侧/);
+test('new lineups require one character per slot and at most four characters',()=>{
+  assert.doesNotThrow(()=>validateLineup([...core,'小瑞安侬']));
+  assert.throws(()=>validateLineup(optional),/只能填一名/);
+  assert.throws(()=>validateLineup([...core,'小瑞安侬/卡戎']),/只能填一名/);
+  assert.throws(()=>validateLineup([...core,'小瑞安侬','卡戎']),/1—4/);
 });
 test('pending or rejected submissions do not enter leaderboard',()=>{
   const approved=make('a','甲',5,'2026-01-01');
