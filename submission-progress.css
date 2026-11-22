@@ -6,6 +6,10 @@
 .submission-status.status-rejected{color:#ffb1ad}
 .submission-reason,.review-contact{margin:.7rem 0 0;overflow-wrap:anywhere;white-space:pre-wrap}
 .submission-reason{border-inline-start:2px solid var(--gold2);padding-inline-start:.65rem}
+.rejection-form{margin-top:.85rem;padding:.85rem;border:1px solid var(--line);border-inline-start:2px solid #d8847f}
+.rejection-form .field{margin:0}
+.rejection-error{margin:.55rem 0;color:#ffb1ad}
+.rejection-error:empty{display:none}
 .resonance-tag{color:#f8db9e;background:#423320;font-weight:700}
 button.resonance-tag[aria-pressed="true"]{color:#211508;background:#f4cd7d;border-color:#f4cd7d}
 button.resonance-tag:focus-visible,.resonance-choice input:focus-visible{outline:2px solid var(--gold);outline-offset:3px}

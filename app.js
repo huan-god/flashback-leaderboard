@@ -1,8 +1,8 @@
 import {compareRecord,validateLineup} from './logic.mjs?v=lineup-3';
 import {
-  adminContact, askRejectionReason, contactField, mountSubmissionProgress,
+  adminContact, showRejectionForm, contactField, mountSubmissionProgress,
   bindModerationFilters, filterModerationRows, moderationFilterFields, moderationPager, moderationPageSize
-} from './submission-progress.js?v=1';
+} from './submission-progress.js?v=rejection-2';
 
 const config = window.FLASHBACK_CONFIG || {};
 const hasBackendConfig = Boolean(config.supabaseUrl && config.supabaseAnonKey);
@@ -475,15 +475,13 @@ async function saveScore(form){
   }catch(e){toast(`保存成绩失败：${e.message||e}`);}
   finally{button.disabled=false;}
 }
-async function review(id,approved){
-  if(!state.isAdmin)return;
-  const reason=approved?'':askRejectionReason(toast);
-  if(reason===null)return;
-  try {
-    const {error}=await sb.rpc('review_submission',{p_submission_id:id,p_decision:approved?'approved':'rejected',p_note:reason});
-    if(error)throw error;
-    await refresh();await openAdmin('pending');toast(approved?'审核通过，排行榜已更新。':'投稿已拒绝。');
-  }catch(e){toast(`审核失败：${e.message||e}`);}
+async function review(id,decision,reason=''){
+  if(!state.isAdmin)throw Error('仅管理员可以审核。');
+  const {error}=await sb.rpc('review_submission',{p_submission_id:id,p_decision:decision,p_note:reason});
+  if(error)throw error;
+  if(decision==='approved')await refresh();
+  await openAdmin('pending');
+  toast(decision==='approved'?'审核通过，排行榜已更新。':'投稿已拒绝。');
 }
 async function removeRecord(id){
   if(!state.isAdmin)return;
@@ -707,7 +705,15 @@ document.addEventListener('click',async ev=>{
     return;
   }
   if(action==='refresh'){await init();if(state.connected)toast('榜单已更新。');return;}
-  if(action==='approve'||action==='reject'){await review(el.dataset.id,action==='approve');return;}
+  if(action==='reject'){
+    if(state.isAdmin)showRejectionForm(el,reason=>review(el.dataset.id,'rejected',reason));
+    return;
+  }
+  if(action==='approve'){
+    try{await review(el.dataset.id,'approved');}
+    catch(error){toast(`审核失败：${error.message||error}`);}
+    return;
+  }
   if(action==='preview'){await preview(el.dataset.id,el);return;}
   if(action==='manage-versions'){openVersionManager();return;}
   if(action==='new-version'||action==='edit-version'){openVersion(el.dataset.id||'');return;}
