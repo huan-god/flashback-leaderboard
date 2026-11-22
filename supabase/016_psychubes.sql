@@ -1,5 +1,6 @@
 -- ============================================================================
 -- 016: 心相与共鸣码扩展迁移（纯增量升级，完整保留现有数据库表与历史数据）
+-- 使用方式：在 Supabase Dashboard -> SQL Editor 粘贴全文并点击 Run 即可。
 -- ============================================================================
 
 -- 1. 为鬃毛邮报与焦点闪回表新增可空心相与共鸣码数组列（按 1–4 号位对应 team）
@@ -28,7 +29,11 @@ ALTER TABLE public.submissions
   ADD CONSTRAINT submissions_team_resonance_len
     CHECK (team_resonance_codes IS NULL OR coalesce(array_length(team_resonance_codes, 1), 0) <= 4);
 
--- 3. 更新投稿 RPC，使新投稿提交的心相与共鸣码随同联系方式一并入库
+-- 3. 为 mane_entries 新列补充列级权限（沿用 001_mane_leaderboard.sql 的最小权限策略）
+GRANT SELECT (team_psychubes, team_resonance_codes) ON public.mane_entries TO anon, authenticated;
+GRANT INSERT (team_psychubes, team_resonance_codes), UPDATE (team_psychubes, team_resonance_codes) ON public.mane_entries TO authenticated;
+
+-- 4. 更新投稿 RPC，使新投稿提交的心相与共鸣码随同联系方式一并入库
 CREATE OR REPLACE FUNCTION public.submit_flashback_result(p_record jsonb, p_contact text DEFAULT NULL)
 RETURNS void
 LANGUAGE plpgsql
@@ -94,7 +99,41 @@ BEGIN
 END;
 $$;
 
--- 4. 更新焦点闪回公开排行榜视图，导出 team_psychubes 与 team_resonance_codes
+-- 5. 管理员补充/修改焦点闪回心相与共鸣码的受控 RPC（严格校验 is_admin()）
+CREATE OR REPLACE FUNCTION public.update_submission_builds(
+  p_id uuid,
+  p_team_psychubes text[] DEFAULT NULL,
+  p_team_resonance_codes text[] DEFAULT NULL
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF NOT (SELECT public.is_admin()) THEN
+    RAISE EXCEPTION '只有管理员可以修改配装记录。' USING ERRCODE = '42501';
+  END IF;
+  UPDATE public.submissions
+  SET team_psychubes = p_team_psychubes,
+      team_resonance_codes = p_team_resonance_codes
+  WHERE id = p_id;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.update_submission_builds(uuid, text[], text[]) FROM public, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.update_submission_builds(uuid, text[], text[]) TO authenticated;
+
+-- 6. 更新两张公开只读视图，使前台「查看」与榜单列表标签自动显示心相与共鸣码
+CREATE OR REPLACE VIEW public.mane_leaderboard WITH (security_invoker = true) AS
+SELECT DISTINCT ON (e.map_id, e.division, e.team_key)
+  e.id, e.player_id, e.map_id, e.display_name, e.division, e.team, e.carry, e.score, e.created_at, e.related_url,
+  e.team_psychubes, e.team_resonance_codes
+FROM public.mane_entries e
+JOIN public.mane_maps m ON e.map_id = m.id
+WHERE e.status = 'approved' AND m.active
+ORDER BY e.map_id, e.division, e.team_key, e.score DESC, e.created_at, e.id;
+GRANT SELECT ON public.mane_leaderboard TO anon, authenticated;
+
 CREATE OR REPLACE VIEW public.leaderboard_records WITH (security_invoker = true) AS
 SELECT r.id, r.player_id, r.stage_id, r.group_code, w.team, r.team_key, r.carry_name,
   r.rounds, r.created_at, coalesce(r.credited_player, p.display_name) AS display_name,
@@ -105,6 +144,4 @@ JOIN public.submissions r ON r.id = w.id
 LEFT JOIN public.profiles p ON p.id = r.player_id
 JOIN public.stages st ON st.id = r.stage_id
 JOIN public.versions v ON v.id = st.version_id;
-
--- 5. 提示：若需鬃毛邮报公开榜同步展示心相与共鸣码，请同步在 public.mane_leaderboard 视图末尾加上：
---    team_psychubes, team_resonance_codes
+GRANT SELECT ON public.leaderboard_records TO anon, authenticated;

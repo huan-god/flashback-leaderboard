@@ -4195,14 +4195,15 @@ document.addEventListener('submit', async (ev) => {
         p_resonance_ten: fd.get('group') === 'zero' && fd.has('resonanceTen')
       }));
       if (built.hasAny) {
-        const extraPatch = {};
-        if (built.hasPsychubes) extraPatch.team_psychubes = built.psychubes;
-        if (built.hasResonance) extraPatch.team_resonance_codes = built.resonanceCodes;
         try {
-          await checked(sb.from('submissions').update(extraPatch).eq('id', form.dataset.id));
+          await checked(sb.rpc('update_submission_builds', {
+            p_id: form.dataset.id,
+            p_team_psychubes: built.hasPsychubes ? built.psychubes : null,
+            p_team_resonance_codes: built.hasResonance ? built.resonanceCodes : null
+          }));
         } catch (err) {
-          if (isMissingBuildColumnError(err)) {
-            throw new Error('基础成绩已保存，但线上数据库尚未添加心相/共鸣码列，请先运行配套迁移 SQL。');
+          if (isMissingBuildColumnError(err) || /update_submission_builds|PGRST202/i.test(`${err?.code || ''} ${err?.message || ''}`)) {
+            throw new Error('基础成绩已保存，但线上数据库尚未运行 016_psychubes.sql，请先运行配套迁移 SQL。');
           }
           throw err;
         }
