@@ -17,6 +17,10 @@ from urllib3.util.retry import Retry
 BASE = os.environ["SUPABASE_URL"].rstrip("/")
 KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 SOURCES = ("proofs", "mane-proofs")
+PENDING_TABLES = {
+    "proofs": "submissions",
+    "mane-proofs": "mane_entries",
+}
 ARCHIVE = "screenshot-archives"
 DRY_RUN = os.getenv("DRY_RUN", "true").lower() != "false"
 UTC = timezone.utc
@@ -90,14 +94,52 @@ def make_zip(item):
     return archive.getvalue(), manifest, inside_name
 
 
+def pending_paths(bucket):
+    table = PENDING_TABLES[bucket]
+    paths = set()
+    offset = 0
+    page_size = 1000
+    while True:
+        rows = req(
+            "GET",
+            f"{BASE}/rest/v1/{table}",
+            params={
+                "select": "evidence_path",
+                "status": "eq.pending",
+                "archived_at": "is.null",
+                "order": "id.asc",
+            },
+            headers={"Range-Unit": "items", "Range": f"{offset}-{offset + page_size - 1}"},
+        ).json()
+        for row in rows:
+            path = row.get("evidence_path")
+            if isinstance(path, str) and path:
+                paths.add(path)
+        if len(rows) < page_size:
+            return paths
+        offset += page_size
+
+
 def main():
     now = datetime.now(UTC)
     cutoff = now - timedelta(hours=24)
     expire_before = now - timedelta(days=7)
-    candidates = sorted((item for bucket in SOURCES for item in objects(bucket)
-                         if parsed_datetime(item["created_at"]) <= cutoff),
-                        key=lambda item: (item["created_at"], item["bucket"], item["name"]))
-    print(f"Eligible originals: {len(candidates)}; dry_run={DRY_RUN}", flush=True)
+    protected = {bucket: pending_paths(bucket) for bucket in SOURCES}
+    candidates = []
+    skipped_pending = 0
+    for bucket in SOURCES:
+        for item in objects(bucket):
+            if parsed_datetime(item["created_at"]) > cutoff:
+                continue
+            if item["name"] in protected[bucket]:
+                skipped_pending += 1
+                continue
+            candidates.append(item)
+    candidates.sort(key=lambda item: (item["created_at"], item["bucket"], item["name"]))
+    print(
+        f"Eligible originals: {len(candidates)}; skipped_pending={skipped_pending}; dry_run={DRY_RUN}",
+        flush=True,
+    )
     if DRY_RUN:
         print(json.dumps(candidates[:10], ensure_ascii=False, indent=2), flush=True)
     else:
