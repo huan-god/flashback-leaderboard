@@ -1,0 +1,26 @@
+name: Archive Supabase screenshots
+on:
+  schedule:
+    - cron: "15 18 * * *" # 02:15 Beijing time / UTC+8
+  workflow_dispatch:
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    concurrency:
+      group: supabase-screenshot-archive
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "requests>=2.32,<3" "urllib3>=2,<3"
+      - name: Archive and expire
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DRY_RUN: ${{ vars.ARCHIVE_DRY_RUN || 'true' }}
+        run: python scripts/archive_screenshots.py
