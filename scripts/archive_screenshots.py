@@ -19,7 +19,10 @@ CHUNK_BYTES = int(os.getenv("CHUNK_BYTES", str(35 * 1024 * 1024)))
 UTC = timezone.utc
 
 session = requests.Session()
-session.headers.update({"apikey": KEY, "Authorization": f"Bearer {KEY}"})
+session.headers.update({"apikey": KEY})
+
+if not KEY.startswith("sb_secret_"):
+    session.headers["Authorization"] = f"Bearer {KEY}"
 retries = Retry(total=4, backoff_factor=1, status_forcelist=[429,500,502,503,504],
                 allowed_methods=frozenset(["GET","POST","PUT","DELETE"]))
 session.mount("https://", HTTPAdapter(max_retries=retries))
